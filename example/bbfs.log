@@ -1,0 +1,210 @@
+
+bb_init()
+    conn:
+    proto_major = 7
+    proto_minor = 14
+    async_read = 1
+    max_write = 131072
+    max_readahead = 131072
+    capable = 0000007b
+    want = 00000010
+    context:
+    fuse = 01813540
+    uid = 0
+    gid = 0
+    pid = 0
+    private_data = 01812010
+    logfile = 01813040
+    rootdir = /vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir
+    umask = 00000
+
+bb_getattr(path="/.Trash", statbuf=0x316d5d40)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/.Trash", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/.Trash"
+    ERROR bb_getattr lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/.Trash-500", statbuf=0x320d6d40)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/.Trash-500", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/.Trash-500"
+    ERROR bb_getattr lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/", statbuf=0x316d5d10)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/"
+    si:
+    st_dev = 21
+    st_ino = 62
+    st_mode = 040755
+    st_nlink = 1
+    st_uid = 500
+    st_gid = 500
+    st_rdev = 0
+    st_size = 102
+    st_blksize = 4096
+    st_blocks = 0
+    st_atime = 0x5609b43f
+    st_mtime = 0x5609b3bf
+    st_ctime = 0x5609b3bf
+
+bb_opendir(path="/", fi=0x316d5d80)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/"
+    fi:
+    flags = 0x00098800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007f1824000b20
+    lock_owner = 0x0000000000000000
+
+bb_readdir(path="/", buf=0x24000990, filler=0x32aa1170, offset=0, fi=0x320d6d80)
+calling filler with name .
+calling filler with name ..
+calling filler with name bogus.txt
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7f1824000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007f1824000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/bogus.txt", statbuf=0x316d5d40)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/bogus.txt", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/bogus.txt"
+    si:
+    st_dev = 21
+    st_ino = 63
+    st_mode = 0100600
+    st_nlink = 1
+    st_uid = 500
+    st_gid = 500
+    st_rdev = 0
+    st_size = 11
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x5609b3bf
+    st_mtime = 0x5609b3bf
+    st_ctime = 0x5609b3bf
+
+bb_releasedir(path="/", fi=0x316d5d80)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7f1824000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007f1824000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x320d6d10)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/"
+    si:
+    st_dev = 21
+    st_ino = 62
+    st_mode = 040755
+    st_nlink = 1
+    st_uid = 500
+    st_gid = 500
+    st_rdev = 0
+    st_size = 102
+    st_blksize = 4096
+    st_blocks = 0
+    st_atime = 0x5609b67e
+    st_mtime = 0x5609b3bf
+    st_ctime = 0x5609b3bf
+
+bb_getattr(path="/", statbuf=0x316d5d10)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/"
+    si:
+    st_dev = 21
+    st_ino = 62
+    st_mode = 040755
+    st_nlink = 1
+    st_uid = 500
+    st_gid = 500
+    st_rdev = 0
+    st_size = 102
+    st_blksize = 4096
+    st_blocks = 0
+    st_atime = 0x5609b67e
+    st_mtime = 0x5609b3bf
+    st_ctime = 0x5609b3bf
+
+bb_opendir(path="/", fi=0x320d6d80)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/"
+    fi:
+    flags = 0x00098800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007f182c000c80
+    lock_owner = 0x0000000000000000
+
+bb_readdir(path="/", buf=0x2c000af0, filler=0x32aa1170, offset=0, fi=0x316d5d80)
+calling filler with name .
+calling filler with name ..
+calling filler with name bogus.txt
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7f182c000c80
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007f182c000c80
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/bogus.txt", statbuf=0x320d6d40)
+    bb_fullpath:  rootdir = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir", path = "/bogus.txt", fpath = "/vagrant/Fuse Tutorial/fuse-tutorial-2014-06-12/example/rootdir/bogus.txt"
+    si:
+    st_dev = 21
+    st_ino = 63
+    st_mode = 0100600
+    st_nlink = 1
+    st_uid = 500
+    st_gid = 500
+    st_rdev = 0
+    st_size = 11
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x5609b3bf
+    st_mtime = 0x5609b3bf
+    st_ctime = 0x5609b3bf
+
+bb_releasedir(path="/", fi=0x320d6d80)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7f182c000c80
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007f182c000c80
+    lock_owner = 0x0000000000000000
+
+bb_destroy(userdata=0x01812010)
