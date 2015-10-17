@@ -6,7 +6,9 @@ int my_chmod(const char *path, mode_t mode);
 int my_chown(const char *path, uid_t owner, gid_t group);
 int my_close(int fd);
 int my_closedir(DIR *dirp);
+
 int my_creat(const char *pathname, mode_t mode);
+
 int my_fdatasync(int fd);
 int my_fstat(int fd, struct stat *buf);
 int my_fsync(int fd);
