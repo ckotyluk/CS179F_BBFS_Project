@@ -6,7 +6,7 @@
 #include "my_calls.h"
 #include <string>
 #include <iostream>
-#include "my_file.h"
+//#include "my_file.h"
 
 int my_access(const char *pathname, int mode)
 {
@@ -35,19 +35,19 @@ int my_closedir(DIR *dirp)
 
 //added function toverify the validity of the
 //path to a file or a directory
-bool is_valid(string fullpath){
+//bool is_valid(string fullpath){
 	/*vector<string> folders;	
 	istringstream ss(fullpath);
 	string token;
 	while (getline(ss,token, '/')){
 		folders.push_back(token);
 	}*/
-	return (dir_table[fullpath]) ? true : false;
-}
+	//return (dir_table[fullpath]) ? true : false;
+//}
 
 int my_creat(const char *pathname, mode_t mode)
 {
-	string pth(pathname);
+	/*string pth(pathname);
 	if (pth [0] != '/')
 		return -1;
 	
@@ -70,6 +70,7 @@ int my_creat(const char *pathname, mode_t mode)
 	parent_dir.file_list.push_back(new_file);
 	//pushing into the table of files
 	file_table[new_file.fh] = new_file;
+    */
 }
 
 int my_fdatasync(int fd)
