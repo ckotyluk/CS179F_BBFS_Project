@@ -10,4 +10,4 @@ bbfs.o: bbfs.c
 	@echo "Built bbfs.o"
 
 clean:
-	rm *.o *.out
+	rm *.o *.out *.gch

@@ -1,24 +1,30 @@
 #ifndef _MY_CALLS_H_
-#define _MY_CALLS_H
+#define _MY_CALLS_H_
+
+#include <vector>
 
 struct my_inode
 {
-    dev_t           i_dev;      // device number
+    //dev_t           i_dev;      // device number
     unsigned long   i_ino;      // inode number
-    mode_t          i_mode;  	// mode(protection bits) also explains file type
-    nlink_t         i_nlink;    // number of hard links
-    uid_t           i_uid;      // user id of owner
-    gid_t           i_gid;      // group id of owner
-    dev_t           i_rdev;     // device ID (if special file)
+    mode_t          i_mode;     // mode(protection bits) also explains file type
+    //nlink_t         i_nlink;    // number of hard links
+    //uid_t           i_uid;      // user id of owner
+    //gid_t           i_gid;      // group id of owner
+    //dev_t           i_rdev;     // device ID (if special file)
     off_t           i_size;     // total size of file, in bytes
-    unsigned long   i_blksize;  // block size
-    unsigned long   i_blocks;   // blocks
-    time_t          i_atime;    // time of last access
-    time_t          i_mtime;    // time of last modification
-    time_t          i_ctime;    // time of last status change
+    //unsigned long   i_blksize;  // block size
+    //unsigned long   i_blocks;   // blocks
+    //time_t          i_atime;    // time of last access
+    //time_t          i_mtime;    // time of last modification
+    //time_t          i_ctime;    // time of last status change
     
-    char* 			buf[512];	//File array (later convert to blocks)
+    std::vector<char>    buf;   //File array (later convert to blocks)
 };
+
+void inode_init(my_inode &in, mode_t i_m);
+
+std::vector<my_inode> ilist;    //List of inodes
 
 struct my_dirent
 {
@@ -28,19 +34,19 @@ struct my_dirent
 
 struct my_stat
 {
-    dev_t           s_dev;     // ID of device containing file
-    ino_t           s_ino;     // inode number
-    mode_t          s_mode;    // protection
-    nlink_t         s_nlink;   // number of hard links
-    uid_t           s_uid;     // user ID of owner
-    gid_t			s_gid;		// group ID of owner
-    dev_t			s_rdev;	// device ID (if special file)
-    off_t			s_size;	// total size, in bytes
-    blksize_t		s_blksize; // blocksize for filesystem I/O
-    blkcnt_t		s_blocks;	// number of blocks allocated
-    time_t			s_atime;	// time of last access
-    time_t			s_mtime;	// time of last modification
-    time_t			s_ctime;	// time of last status change
+    dev_t           s_dev;      // ID of device containing file
+    ino_t           s_ino;      // inode number
+    mode_t          s_mode;     // protection
+    nlink_t         s_nlink;    // number of hard links
+    uid_t           s_uid;      // user ID of owner
+    gid_t           s_gid;      // group ID of owner
+    dev_t           s_rdev;     // device ID (if special file)
+    off_t           s_size;     // total size, in bytes
+    blksize_t       s_blksize;  // blocksize for filesystem I/O
+    blkcnt_t        s_blocks;   // number of blocks allocated
+    time_t          s_atime;    // time of last access
+    time_t          s_mtime;    // time of last modification
+    time_t          s_ctime;    // time of last status change
 };
 
 int my_access(const char *pathname, int mode);
