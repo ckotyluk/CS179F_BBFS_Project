@@ -7,18 +7,17 @@
 #include <string>
 #include <iostream>
 #include <vector>
-//#include "my_file.h"
-
+#include <map>
 
 //inode functions
 void inode_init(my_inode &in, mode_t i_m)
 {
-	in.i_ino = ilist.size();
+	in.i_ino = my_ilist.size();
 	in.i_mode = i_m;
-	in.i_size = 0;
+	//in.i_size = 0;
 
 	//Last thing to do
-	ilist.push_back(in);
+    my_ilist.insert( std::pair<unsigned long, my_inode>(in.i_ino, in) );
 }
 
 int my_access(const char *pathname, int mode)
@@ -60,39 +59,25 @@ int my_closedir(DIR *dirp)
 
 int my_creat(const char *pathname, mode_t mode)
 {
-	/*string pth(pathname);
-	if (pth [0] != '/')
-		return -1;
-	
-	int pos = pth.find_last_of("/");
-	string fname = pth.substr(pos+1);
-	string rpath = pth.substr(0, pos);
-	
-	if !is_valid(rpath)
-		return -1;
-
-	my_file new_file = {
-		.data = new char[1024],
-		.fh = file_table.size(),
-		.file_name = fname
-	};
-	
-	my_dir parent_dir = dir_table[rpath];
-	//pushing inside the file list of the current working directory
-	
-	parent_dir.file_list.push_back(new_file);
-	//pushing into the table of files
-	file_table[new_file.fh] = new_file;
-    */
-
 	//Create new inode
 	my_inode a;
 	//Initialize inode
 	inode_init(a, mode);
+	//make a dirent for this inode
 
-	//Create dirent for inode
-	//Initialize dirent
-	//Add dirent to parent directory
+	//split pathname
+
+	//grab the root inode number which is 0
+
+	//find the corresponding inode from the ilist using the inode number
+
+	//look up the vector of dirents and find the dirent
+
+	//use the inode number in that dirent to find its corr. inode in ilist
+
+	//when we have the last dirent push the new_dirent onto it
+
+	//return the inode number
 
     return -1;
 }

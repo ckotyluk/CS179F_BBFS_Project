@@ -2,6 +2,7 @@
 #define _MY_CALLS_H_
 
 #include <vector>
+#include <map>
 
 struct my_inode
 {
@@ -12,7 +13,7 @@ struct my_inode
     //uid_t           i_uid;      // user id of owner
     //gid_t           i_gid;      // group id of owner
     //dev_t           i_rdev;     // device ID (if special file)
-    off_t           i_size;     // total size of file, in bytes
+    //off_t           i_size;     // total size of file, in bytes
     //unsigned long   i_blksize;  // block size
     //unsigned long   i_blocks;   // blocks
     //time_t          i_atime;    // time of last access
@@ -20,11 +21,14 @@ struct my_inode
     //time_t          i_ctime;    // time of last status change
     
     std::vector<char>    buf;   //File array (later convert to blocks)
+    std::vector<my_dirent> dirent_buf;
 };
 
 void inode_init(my_inode &in, mode_t i_m);
 
-std::vector<my_inode> ilist;    //List of inodes
+//std::vector<my_inode> ilist;    //List of inodes
+std::map<unsigned long, my_inode> my_ilist;
+
 
 struct my_dirent
 {
