@@ -25,7 +25,7 @@ unsigned long inode_init(mode_t i_m)
 		}
 	}
 	
-	in.i_ino = max_inode;
+	in.i_ino = max_inode+1;
 	
 	in.i_mode = i_m;
 	//in.i_size = 0;
