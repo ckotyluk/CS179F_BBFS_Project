@@ -29,6 +29,7 @@ struct my_inode
     
     std::vector<char>    buf;   //File array (later convert to blocks)
     std::vector<my_dirent> dirent_buf;
+	my_inode(unsigned long x, mode_t y) : i_ino(x), i_mode(y) {}
 };
 
 unsigned long inode_init(mode_t i_m);

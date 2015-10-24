@@ -8,12 +8,13 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <string.h>
 
 //inode functions
 unsigned long inode_init(mode_t i_m)
 {
 	//Create new inode
-	my_inode in;
+	//my_inode in;
 	
 	unsigned long max_inode = 0;
 	
@@ -25,16 +26,17 @@ unsigned long inode_init(mode_t i_m)
 		}
 	}
 	
-	in.i_ino = max_inode+1;
-	
-	in.i_mode = i_m;
-	//in.i_size = 0;
+	my_inode in(max_inode+1, i_m);
 
 	//Add to ilist
     my_ilist.insert( std::pair<unsigned long, my_inode>(in.i_ino, in) );
     
     return in.i_ino;
 }
+
+my_inode root_inode(0, 222);
+my_ilist.insert( std::pair<unsigned long, my_inode>(0, root_inode) );
+
 
 int my_access(const char *pathname, int mode)
 {
@@ -61,18 +63,6 @@ int my_closedir(DIR *dirp)
 	return -1;
 }
 
-//added function toverify the validity of the
-//path to a file or a directory
-//bool is_valid(string fullpath){
-	/*vector<string> folders;	
-	istringstream ss(fullpath);
-	string token;
-	while (getline(ss,token, '/')){
-		folders.push_back(token);
-	}*/
-	//return (dir_table[fullpath]) ? true : false;
-//}
-
 int my_creat(const char *pathname, mode_t mode)
 {
 	//Create and initialize new inode
@@ -91,8 +81,51 @@ int my_creat(const char *pathname, mode_t mode)
 	//when we have the last dirent push the new_dirent onto it
 	my_dirent new_dirent;
 	new_dirent.d_ino = inum;
+
+	char* token = strtok((char*)pathname, "/");
+	std::vector<char*> dir_names;
+	while(token != NULL){
+		dir_names.push_back(token);
+		token = strtok(NULL, "/");
+	}
+	std::vector<char*>::iterator it = dir_names.end();
+	char fname[strlen(*it)+1];
+	strcpy(fname, *it);
+	strcpy(new_dirent.d_name, fname);
+	dir_names.pop_back();
+	
+	my_inode root = my_ilist[0];
+	my_inode parentdir_inode(0, 0);
+
+	if (dir_names.size() == 0){//The parent directory is /
+		root.dirent_buf.push_back(new_dirent);
+	}
+	else{
+		my_inode temp = root;
+		for(std::vector<char*>::iterator t = dir_names.begin(); t != dir_names.end(); ++t){
+			std::vector<my_dirent> t_dirent = temp.dirent_buf;
+			int is_there = 0;
+			bool is_last =(t == (dir_names.end() - 1)) ? true : false;
+			for(std::vector<my_dirent>::iterator iter = t_dirent.begin(); iter != t_dirent.end(); ++iter){
+				if(strcmp(*t, iter->d_name) == 0 && !is_last){
+					temp = my_ilist[iter->d_ino];
+					is_there = 1;
+					break;
+				}
+				else if(strcmp(*t, iter->d_name) == 0 && is_last){
+					parentdir_inode = my_ilist[iter->d_ino];
+					is_there = 1;
+					break;
+				}
+			}
+			if(is_there == 0){//directory *t not found
+				std::cout <<"\tThe path : "<< pathname << " is invalid" << std::endl;
+				break;
+			}
+		}
+	}
 	//new_dirent.d_name = fname;
-	//parentdir_inode.dirent_buf.push_back(new_dirent);
+	parentdir_inode.dirent_buf.push_back(new_dirent);
 
 	return inum;
 }
