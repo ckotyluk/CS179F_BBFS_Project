@@ -15,7 +15,18 @@ unsigned long inode_init(mode_t i_m)
 	//Create new inode
 	my_inode in;
 	
-	in.i_ino = my_ilist.size();
+	unsigned long max_inode = 0;
+	
+	for(std::map<unsigned long, my_inode>::iterator it = my_ilist.begin(); it != my_ilist.end(); ++it)
+	{
+		if(it->second.i_ino > max_inode)
+		{
+			max_inode = it->second.i_ino;
+		}
+	}
+	
+	in.i_ino = max_inode;
+	
 	in.i_mode = i_m;
 	//in.i_size = 0;
 
