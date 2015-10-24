@@ -10,14 +10,40 @@
 #include <map>
 #include <string.h>
 
+//Helper Functions
+std::vector<std::string> split(const std::string s, const std::string pat)
+{
+	std::string c;
+	std::vector<std::string> v;
+	int i = 0;
+
+	for(;;)
+	{
+		int t = s.find(pat,i); //Finds ith pat in s
+		//If end of string, j = s.size(), otherwise j=t
+		int j = ( ( t == std::string::npos) ? s.size() : t);
+
+		//Create a string from i to j-i
+		std::string c = s.substr(i,j-i);
+		//Add this string to the vector
+		if(!c.empty())
+			v.push_back(c);
+		
+		i = j+pat.size();
+
+		//If the end of the string is reached, return v
+		if( t == std::string::npos) return v;
+	}
+}
+
 //inode functions
 unsigned long inode_init(mode_t i_m)
 {
 	//Create new inode
 	//my_inode in;
 	
+	//Find the current highest inode value used
 	unsigned long max_inode = 0;
-	
 	for(std::map<unsigned long, my_inode>::iterator it = my_ilist.begin(); it != my_ilist.end(); ++it)
 	{
 		if(it->second.i_ino > max_inode)
@@ -26,16 +52,18 @@ unsigned long inode_init(mode_t i_m)
 		}
 	}
 	
+	//Create a new inode with max+1 inode number and i_m mode
 	my_inode in(max_inode+1, i_m);
 
-	//Add to ilist
+	//Add to inode to the ilist
     my_ilist.insert( std::pair<unsigned long, my_inode>(in.i_ino, in) );
     
+    //Return the inode number
     return in.i_ino;
 }
 
-my_inode root_inode(0, 222);
-my_ilist.insert( std::pair<unsigned long, my_inode>(0, root_inode) );
+//my_inode root_inode(0, 222);
+//my_ilist.insert( std::pair<unsigned long, my_inode>(0, root_inode) );
 
 
 int my_access(const char *pathname, int mode)
@@ -82,51 +110,60 @@ int my_creat(const char *pathname, mode_t mode)
 	my_dirent new_dirent;
 	new_dirent.d_ino = inum;
 
-	char* token = strtok((char*)pathname, "/");
-	std::vector<char*> dir_names;
-	while(token != NULL){
-		dir_names.push_back(token);
-		token = strtok(NULL, "/");
-	}
-	std::vector<char*>::iterator it = dir_names.end();
-	char fname[strlen(*it)+1];
-	strcpy(fname, *it);
-	strcpy(new_dirent.d_name, fname);
-	dir_names.pop_back();
-	
-	my_inode root = my_ilist[0];
-	my_inode parentdir_inode(0, 0);
+	//Splits the string into seperate strings at "/"
+	//Last string is the file name, others are directories
+	std::vector<std::string> dir_names = split(pathname, "/");
 
-	if (dir_names.size() == 0){//The parent directory is /
+	//Grab filename and remove from list of directory names
+	std::string fname = dir_names.at(dir_names.size()-1);
+	dir_names.pop_back();
+	//Adds filename to new dirent
+	strcpy(new_dirent.d_name, fname.c_str());
+
+	//Get root inode, assuming root inum is 0
+	my_inode root = (my_ilist.find(0)->second);
+
+	if(dir_names.size() == 0)
+	//dir_names is empty, so parent dir is root(/)
+	{
 		root.dirent_buf.push_back(new_dirent);
 	}
-	else{
+	else
+	{
 		my_inode temp = root;
-		for(std::vector<char*>::iterator t = dir_names.begin(); t != dir_names.end(); ++t){
-			std::vector<my_dirent> t_dirent = temp.dirent_buf;
-			int is_there = 0;
-			bool is_last =(t == (dir_names.end() - 1)) ? true : false;
-			for(std::vector<my_dirent>::iterator iter = t_dirent.begin(); iter != t_dirent.end(); ++iter){
-				if(strcmp(*t, iter->d_name) == 0 && !is_last){
-					temp = my_ilist[iter->d_ino];
-					is_there = 1;
-					break;
-				}
-				else if(strcmp(*t, iter->d_name) == 0 && is_last){
-					parentdir_inode = my_ilist[iter->d_ino];
-					is_there = 1;
-					break;
-				}
-			}
-			if(is_there == 0){//directory *t not found
-				std::cout <<"\tThe path : "<< pathname << " is invalid" << std::endl;
-				break;
-			}
-		}
-	}
-	//new_dirent.d_name = fname;
-	parentdir_inode.dirent_buf.push_back(new_dirent);
+		std::vector<std::string>::iterator it;
 
+		//Go through list of dir_names
+		for(it = dir_names.begin(); it != dir_names.end(); it++)
+		{
+			//Look through current directory dirents for current dir_name
+			unsigned long inum_temp = -1;
+			for(int i = 0; i < temp.dirent_buf.size(); i++)
+			{
+				//Compare cur dir_name to dirent names in dirent_buf
+				if( std::string(*it) == std::string(temp.dirent_buf[i].d_name) )
+				{
+					//Found dirent, so set inum and break
+					inum_temp = temp.dirent_buf[i].d_ino;
+					break;
+				}
+			}
+			if(inum_temp == -1)
+			{
+				//A matching dirent was not found, so inum_temp was never set
+				std::cout << "The path: " << pathname << " is invalid" << std::endl;
+				return -1; //Error ocurred
+			}
+
+			//Assign temp to the new inode based on the inum_temp
+			temp = my_ilist.find(inum_temp)->second;
+		}
+
+		//Finished traversing the path, parent dir found and stored in temp
+		//temp.dirent_buf.push_back(new_dirent);
+		//Make changes to the inode that is stored in the ilist
+		my_ilist.find(temp.i_ino)->second.dirent_buf.push_back(new_dirent);
+	}
 	return inum;
 }
 

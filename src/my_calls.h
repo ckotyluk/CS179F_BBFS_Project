@@ -3,7 +3,10 @@
 
 #include <vector>
 #include <map>
+#include <string>
 
+//Helper Functions
+std::vector<std::string> split(const std::string s, const std::string pat);
 
 struct my_dirent
 {
