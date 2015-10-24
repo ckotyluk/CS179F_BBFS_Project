@@ -10,14 +10,19 @@
 #include <map>
 
 //inode functions
-void inode_init(my_inode &in, mode_t i_m)
+unsigned long inode_init(mode_t i_m)
 {
+	//Create new inode
+	my_inode in;
+	
 	in.i_ino = my_ilist.size();
 	in.i_mode = i_m;
 	//in.i_size = 0;
 
-	//Last thing to do
+	//Add to ilist
     my_ilist.insert( std::pair<unsigned long, my_inode>(in.i_ino, in) );
+    
+    return in.i_ino;
 }
 
 int my_access(const char *pathname, int mode)
@@ -59,11 +64,8 @@ int my_closedir(DIR *dirp)
 
 int my_creat(const char *pathname, mode_t mode)
 {
-	//Create new inode
-	my_inode a;
-	//Initialize inode
-	inode_init(a, mode);
-	//make a dirent for this inode
+	//Create and initialize new inode
+	unsigned long inum = inode_init(mode);
 
 	//split pathname
 
@@ -76,10 +78,12 @@ int my_creat(const char *pathname, mode_t mode)
 	//use the inode number in that dirent to find its corr. inode in ilist
 
 	//when we have the last dirent push the new_dirent onto it
+	my_dirent new_dirent;
+	new_dirent.d_ino = inum;
+	//new_dirent.d_name = fname;
+	//parentdir_inode.dirent_buf.push_back(new_dirent);
 
-	//return the inode number
-
-    return -1;
+	return inum;
 }
 
 int my_fdatasync(int fd)

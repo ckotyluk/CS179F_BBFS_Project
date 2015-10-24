@@ -4,6 +4,13 @@
 #include <vector>
 #include <map>
 
+
+struct my_dirent
+{
+    ino_t           d_ino;      // inode number
+    char            d_name[256];// file name
+};
+
 struct my_inode
 {
     //dev_t           i_dev;      // device number
@@ -24,17 +31,10 @@ struct my_inode
     std::vector<my_dirent> dirent_buf;
 };
 
-void inode_init(my_inode &in, mode_t i_m);
+unsigned long inode_init(mode_t i_m);
 
 //std::vector<my_inode> ilist;    //List of inodes
 std::map<unsigned long, my_inode> my_ilist;
-
-
-struct my_dirent
-{
-    ino_t           d_ino;      // inode number
-    char            d_name[256];// file name
-};
 
 struct my_stat
 {
