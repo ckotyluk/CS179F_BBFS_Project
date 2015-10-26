@@ -44,6 +44,7 @@
 #endif
 
 #include "log.h"
+#include "my_calls.h"
 
 // Report errors to logfile and give -errno to caller
 static int bb_error(char *str)
@@ -853,7 +854,8 @@ int bb_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	    path, mode, fi);
     bb_fullpath(fpath, path);
     
-    fd = creat(fpath, mode);
+    fd = my_creat(fpath, mode); 
+    //fd = creat(fpath, mode);
     if (fd < 0)
 	retstat = bb_error("bb_create creat");
     

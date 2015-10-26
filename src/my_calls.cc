@@ -3,12 +3,41 @@
 #include <dirent.h>
 #include <sys/statvfs.h>
 #include <utime.h>
-#include "my_calls.h"
+//#include "my_calls.h"
 #include <string>
 #include <iostream>
 #include <vector>
 #include <map>
 #include <string.h>
+
+#ifdef _cplusplus
+extern "C" {
+#endif
+
+#include "my_calls.h"
+
+struct my_inode
+{
+    //dev_t           i_dev;      // device number
+    unsigned long   i_ino;      // inode number
+    mode_t          i_mode;     // mode(protection bits) also explains file type
+    //nlink_t         i_nlink;    // number of hard links
+    //uid_t           i_uid;      // user id of owner
+    //gid_t           i_gid;      // group id of owner
+    //dev_t           i_rdev;     // device ID (if special file)
+    //off_t           i_size;     // total size of file, in bytes
+    //unsigned long   i_blksize;  // block size
+    //unsigned long   i_blocks;   // blocks
+    //time_t          i_atime;    // time of last access
+    //time_t          i_mtime;    // time of last modification
+    //time_t          i_ctime;    // time of last status change
+    
+    std::vector<char>    buf;   //File array (later convert to blocks)
+    std::vector<my_dirent> dirent_buf;
+	my_inode(unsigned long x, mode_t y) : i_ino(x), i_mode(y) {}
+};
+
+std::map<unsigned long, my_inode> my_ilist;
 
 //Helper Functions
 std::vector<std::string> split(const std::string s, const std::string pat)
@@ -301,5 +330,9 @@ int my_utime(const char *filename, const struct utimbuf *times)
 {
 	return -1;
 }
+
+#ifdef _cplusplus
+}
+#endif
 
 

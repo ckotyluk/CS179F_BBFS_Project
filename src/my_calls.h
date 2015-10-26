@@ -1,12 +1,16 @@
 #ifndef _MY_CALLS_H_
 #define _MY_CALLS_H_
 
-#include <vector>
-#include <map>
-#include <string>
+//#include <vector>
+//#include <map>
+//#include <string>
+
+#ifdef _cplusplus
+extern "C" {
+#endif
 
 //Helper Functions
-std::vector<std::string> split(const std::string s, const std::string pat);
+//std::vector<std::string> split(const std::string s, const std::string pat);
 
 struct my_dirent
 {
@@ -14,6 +18,7 @@ struct my_dirent
     char            d_name[256];// file name
 };
 
+/*
 struct my_inode
 {
     //dev_t           i_dev;      // device number
@@ -34,11 +39,12 @@ struct my_inode
     std::vector<my_dirent> dirent_buf;
 	my_inode(unsigned long x, mode_t y) : i_ino(x), i_mode(y) {}
 };
+*/
 
 unsigned long inode_init(mode_t i_m);
 
 //std::vector<my_inode> ilist;    //List of inodes
-std::map<unsigned long, my_inode> my_ilist;
+//std::map<unsigned long, my_inode> my_ilist;
 
 struct my_stat
 {
@@ -76,8 +82,8 @@ int my_lstat(const char *path, struct stat *buf);
 int my_mkdir(const char *pathname, mode_t mode);
 int my_mkfifo(const char *pathname, mode_t mode);
 int my_mknod(const char *pathname, mode_t mode, dev_t dev);
-int my_open(const char *pathname, int flags);
-int my_open(const char *pathname, int flags, mode_t mode);
+int my_open1(const char *pathname, int flags);
+int my_open2(const char *pathname, int flags, mode_t mode);
 DIR *my_opendir(const char *name);
 ssize_t my_pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t my_pwrite(int fd, const void *buf, size_t count, off_t offset);
@@ -91,5 +97,9 @@ int my_truncate(const char *path, off_t length);
 int my_unlink(const char *pathname);
 int my_utime(const char *filename, const struct utimbuf *times);
 
+
+#ifdef _cplusplus
+}
+#endif
 
 #endif
