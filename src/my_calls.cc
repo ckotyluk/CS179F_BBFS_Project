@@ -125,17 +125,6 @@ int my_creat(const char *pathname, mode_t mode)
 	//Create and initialize new inode
 	unsigned long inum = inode_init(mode);
 
-	//split pathname
-
-	//grab the root inode number which is 0
-
-	//find the corresponding inode from the ilist using the inode number
-
-	//look up the vector of dirents and find the dirent
-
-	//use the inode number in that dirent to find its corr. inode in ilist
-
-	//when we have the last dirent push the new_dirent onto it
 	my_dirent new_dirent;
 	new_dirent.d_ino = inum;
 
