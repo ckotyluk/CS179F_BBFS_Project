@@ -1,16 +1,10 @@
 #ifndef _MY_CALLS_H_
 #define _MY_CALLS_H_
 
-//#include <vector>
-//#include <map>
-//#include <string>
 
 #ifdef _cplusplus
 extern "C" {
 #endif
-
-//Helper Functions
-//std::vector<std::string> split(const std::string s, const std::string pat);
 
 struct my_dirent
 {
@@ -18,33 +12,8 @@ struct my_dirent
     char            d_name[256];// file name
 };
 
-/*
-struct my_inode
-{
-    //dev_t           i_dev;      // device number
-    unsigned long   i_ino;      // inode number
-    mode_t          i_mode;     // mode(protection bits) also explains file type
-    //nlink_t         i_nlink;    // number of hard links
-    //uid_t           i_uid;      // user id of owner
-    //gid_t           i_gid;      // group id of owner
-    //dev_t           i_rdev;     // device ID (if special file)
-    //off_t           i_size;     // total size of file, in bytes
-    //unsigned long   i_blksize;  // block size
-    //unsigned long   i_blocks;   // blocks
-    //time_t          i_atime;    // time of last access
-    //time_t          i_mtime;    // time of last modification
-    //time_t          i_ctime;    // time of last status change
-    
-    std::vector<char>    buf;   //File array (later convert to blocks)
-    std::vector<my_dirent> dirent_buf;
-	my_inode(unsigned long x, mode_t y) : i_ino(x), i_mode(y) {}
-};
-*/
-
 unsigned long inode_init(mode_t i_m);
 
-//std::vector<my_inode> ilist;    //List of inodes
-//std::map<unsigned long, my_inode> my_ilist;
 
 struct my_stat
 {

@@ -10,9 +10,7 @@
 #include <map>
 #include <string.h>
 
-#ifdef _cplusplus
 extern "C" {
-#endif
 
 #include "my_calls.h"
 
@@ -250,12 +248,12 @@ int my_mknod(const char *pathname, mode_t mode, dev_t dev)
 	return -1;
 }
 
-int my_open(const char *pathname, int flags)
+int my_open1(const char *pathname, int flags)
 {
 	return -1;
 }
 
-int my_open(const char *pathname, int flags, mode_t mode)
+int my_open2(const char *pathname, int flags, mode_t mode)
 {
 	return -1;
 }
@@ -320,8 +318,7 @@ int my_utime(const char *filename, const struct utimbuf *times)
 	return -1;
 }
 
-#ifdef _cplusplus
 }
-#endif
+
 
 
