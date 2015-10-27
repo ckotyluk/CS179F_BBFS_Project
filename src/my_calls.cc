@@ -36,8 +36,10 @@ struct my_inode
 };
 
 std::map<unsigned long, my_inode> my_ilist;
+std::map<unsigned long, my_inode> my_openFT; //open File table
 
 //Helper Functions
+//---------------------------------------------------------------------
 std::vector<std::string> split(const std::string s, const std::string pat)
 {
 	std::string c;
@@ -61,6 +63,43 @@ std::vector<std::string> split(const std::string s, const std::string pat)
 		//If the end of the string is reached, return v
 		if( t == std::string::npos) return v;
 	}
+}
+
+long get_inode_number(char* pathname){
+	std::vector<std::string> dir_names = split(pathname, "/");
+	
+	my_inode root = my_ilist.find(0)->second;
+	
+	//when the dir_names is empty / was the pathname
+	if(dir_names.size() == 0)
+		return root.i_ino;
+	
+	else{
+		my_inode temp = root;
+		std::vector<std::string>::iterator it;
+		
+		for(it = dir_names.begin(); it != dir_names.end(); it++){
+			long inum_temp = -1;
+			
+			for(int i = 0; i < temp.dirent_buf.size(); i++){
+				
+				if(std::string (*it) == std::string(temp.dirent_buf[i].d_name)){
+					
+					inum_temp = temp.dirent_buf[i].d_ino;
+					break;
+				}
+			}
+			if(inum_temp == -1){
+				
+				std::cout << "The path: " << pathname << " is invalid" <<std::endl;
+				return -1;
+			}
+
+			temp = my_ilist.find(inum_temp)->second;
+		}
+		return temp.i_ino;
+	}
+		
 }
 
 //inode functions
@@ -89,9 +128,8 @@ unsigned long inode_init(mode_t i_m)
     return in.i_ino;
 }
 
-//my_inode root_inode(0, 222);
-//my_ilist.insert( std::pair<unsigned long, my_inode>(0, root_inode) );
-
+//END OF HELPER FUNCTIONS
+//---------------------------------------------------------------------------
 
 int my_access(const char *pathname, int mode)
 {
@@ -118,6 +156,8 @@ int my_closedir(DIR *dirp)
 	return -1;
 }
 
+
+
 int my_creat(const char *pathname, mode_t mode)
 {
 	//Create and initialize new inode
@@ -133,6 +173,11 @@ int my_creat(const char *pathname, mode_t mode)
 	//Grab filename and remove from list of directory names
 	std::string fname = dir_names.at(dir_names.size()-1);
 	dir_names.pop_back();
+
+	//construction of the path to parent folder
+	std::string str = "/";
+	for(int i = 0; i < dir_names.size(); i++)
+		str += dir_names.at(i) + "/";
 	//Adds filename to new dirent
 	strcpy(new_dirent.d_name, fname.c_str());
 
@@ -146,39 +191,9 @@ int my_creat(const char *pathname, mode_t mode)
 	}
 	else
 	{
-		my_inode temp = root;
-		std::vector<std::string>::iterator it;
-
-		//Go through list of dir_names
-		for(it = dir_names.begin(); it != dir_names.end(); it++)
-		{
-			//Look through current directory dirents for current dir_name
-			unsigned long inum_temp = -1;
-			for(int i = 0; i < temp.dirent_buf.size(); i++)
-			{
-				//Compare cur dir_name to dirent names in dirent_buf
-				if( std::string(*it) == std::string(temp.dirent_buf[i].d_name) )
-				{
-					//Found dirent, so set inum and break
-					inum_temp = temp.dirent_buf[i].d_ino;
-					break;
-				}
-			}
-			if(inum_temp == -1)
-			{
-				//A matching dirent was not found, so inum_temp was never set
-				std::cout << "The path: " << pathname << " is invalid" << std::endl;
-				return -1; //Error ocurred
-			}
-
-			//Assign temp to the new inode based on the inum_temp
-			temp = my_ilist.find(inum_temp)->second;
-		}
-
-		//Finished traversing the path, parent dir found and stored in temp
-		//temp.dirent_buf.push_back(new_dirent);
+		unsigned long temp_inode = get_inode_number((char*)str.c_str());
 		//Make changes to the inode that is stored in the ilist
-		my_ilist.find(temp.i_ino)->second.dirent_buf.push_back(new_dirent);
+		my_ilist.find(temp_inode)->second.dirent_buf.push_back(new_dirent);
 	}
 	return inum;
 }
@@ -250,7 +265,19 @@ int my_mknod(const char *pathname, mode_t mode, dev_t dev)
 
 int my_open1(const char *pathname, int flags)
 {
-	return -1;
+	long temp_inum = get_inode_number((char *)pathname);
+	
+	//Check whether the or not the pathname was valid
+	//if the value returned is -1 then it's invalid
+	//otherwise it's valid
+	if(temp_inum == -1){
+		std::cout<<"The file: " << pathname << "doesn't exist."<< std::endl;
+		return -1;
+	}
+	my_inode temp_inode = my_ilist.find(temp_inum)->second;
+	my_openFT.insert(std::pair<unsigned long, my_inode>((unsigned long)temp_inum, temp_inode));
+
+	return temp_inum;
 }
 
 int my_open2(const char *pathname, int flags, mode_t mode)
