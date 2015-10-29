@@ -51,9 +51,7 @@ int my_lstat(const char *path, struct stat *buf);
 int my_mkdir(const char *pathname, mode_t mode);
 int my_mkfifo(const char *pathname, mode_t mode);
 int my_mknod(const char *pathname, mode_t mode, dev_t dev);
-
 int my_open1(const char *pathname, int flags);
-
 int my_open2(const char *pathname, int flags, mode_t mode);
 DIR *my_opendir(const char *name);
 ssize_t my_pread(int fd, void *buf, size_t count, off_t offset);

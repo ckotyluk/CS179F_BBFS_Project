@@ -14,6 +14,7 @@ extern "C" {
 
 #include "my_calls.h"
 
+//Struct which stores information and the data of the file
 struct my_inode
 {
     //dev_t           i_dev;      // device number
@@ -35,8 +36,24 @@ struct my_inode
 	my_inode(unsigned long x, mode_t y) : i_ino(x), i_mode(y) {}
 };
 
+//Struct for an open file
+struct my_file
+{
+	unsigned long	f_desc;			// File descriptor
+	mode_t 			f_mode;			// Permissions modes for the file
+	loff_t			f_pos;			// Current position(offset) in the file
+	unsigned short 	flags;			// Access flags for the file
+	unsigned short 	f_count;		// Access count
+
+	//Inode or inum???
+	struct my_inode *f_inode;		// Pointer to the files inode
+	my_file(unsigned long fd, mode_t m, loff_t pos, unsigned short fl, struct my_inode* i) 
+		: f_desc(fd), f_mode(m), f_pos(pos), flags(fl), f_count(0), f_inode(i) {}
+};
+
 std::map<unsigned long, my_inode> my_ilist;
-std::map<unsigned long, my_inode> my_openFT; //open File table
+
+std::map<unsigned long, my_file> my_openFT; // Open file table
 
 //Helper Functions
 //---------------------------------------------------------------------
@@ -128,6 +145,29 @@ unsigned long inode_init(mode_t i_m)
     return in.i_ino;
 }
 
+unsigned long file_init(mode_t m, loff_t pos, unsigned short flags, my_inode* i)
+{
+	
+	//Find the current highest fd value used
+	unsigned long max_fd = 0;
+	for(std::map<unsigned long, my_file>::iterator it = my_openFT.begin(); it != my_openFT.end(); ++it)
+	{
+		if(it->second.f_desc > max_fd)
+		{
+			max_fd = it->second.f_desc;
+		}
+	}
+
+	//Create new file
+	my_file fi(max_fd+1, m, pos, flags, i);
+
+	//Add the open file to the open file table
+	my_openFT.insert(<unsigned long,my_file>(fi.f_desc,fi));
+
+	//Return the file descriptor
+	return fi.f_desc;
+}
+
 //END OF HELPER FUNCTIONS
 //---------------------------------------------------------------------------
 
@@ -155,8 +195,6 @@ int my_closedir(DIR *dirp)
 {
 	return -1;
 }
-
-
 
 int my_creat(const char *pathname, mode_t mode)
 {
@@ -267,14 +305,21 @@ int my_open1(const char *pathname, int flags)
 {
 	long temp_inum = get_inode_number((char *)pathname);
 	
-	//Check whether the or not the pathname was valid
-	//if the value returned is -1 then it's invalid
-	//otherwise it's valid
+	//Check whether or not the pathname is valid
+	//If invalid pathname, return -1
+	//Otherwise return fd
 	if(temp_inum == -1){
 		std::cout<<"The file: " << pathname << "doesn't exist."<< std::endl;
 		return -1;
 	}
+
+	//Get inode for path
 	my_inode temp_inode = my_ilist.find(temp_inum)->second;
+
+
+	//Inode or inum?
+	file_init(/*mode_t*/ 0x644, /*pos*/ 0, /*flags*/ flags, /*my_inode**/ );
+
 	my_openFT.insert(std::pair<unsigned long, my_inode>((unsigned long)temp_inum, temp_inode));
 
 	return temp_inum;
