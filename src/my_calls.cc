@@ -196,7 +196,11 @@ int my_chown(const char *path, uid_t owner, gid_t group)
 
 int my_close(int fd)
 {
-	return -1;
+	std::map<unsigned long, my_file>::iterator it = my_openFT.find((unsigned long)fd);
+	if (it == my_openFT.end())
+		return -1;
+	my_openFT.erase(it);
+	return 0;
 }
 
 int my_closedir(DIR *dirp)
