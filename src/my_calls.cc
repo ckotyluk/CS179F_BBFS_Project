@@ -175,13 +175,17 @@ int my_access(const char *pathname, int mode)
 	return -1;
 }
 
+//Changes the mod of the file by modifing the inode
 int my_chmod(const char *path, mode_t mode)
 {
-	if (get_inode_number((char*)path) == -1)
+	unsigned long i_num;
+	
+	//Get the inode number and return -1 if invalid
+	if ( (i_num = get_inode_number((char*)path)) == -1)
 		return 0;
 
-	unsigned long i_num = (unsigned long)get_inode_number((char*)path);
-	my_ilist.find(i_num)->second.i_mode = mode;
+	//Set the inode mode to the passed in mode
+	my_ilist.find(i_num)->second.i_mode = (mode_t)mode;
 	return 0;
 }
 
@@ -370,15 +374,13 @@ ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 	
 	// if count > tempBuf.size() then read the whole file and
 	// return the file size as the number of bytes read
-	int bytes_read = 0;
-	if ((int)count > tempBuf.size())
-		bytes_read = tempBuf.size();
-	else
-		bytes_read = (int)count;
+	int bytes_read = ( (int)count > tempBuf.size() ? tempBuf.size() : (int)count );
 	
+	//Move buf contents into str
 	for(index = (int)offset; index < bytes_read + (int)offset; index++)
 		str += tempBuf.at(index);
 	
+	//Copy str into the passed in buf
 	strcpy((char*)buf, str.c_str());
 
 	return (ssize_t)bytes_read;
