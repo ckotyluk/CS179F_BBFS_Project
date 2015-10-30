@@ -268,7 +268,27 @@ int my_fdatasync(int fd)
 
 int my_fstat(int fd, struct stat *buf)
 {
-	return -1;
+	//Get the file from the file descriptor
+	if( my_openFT.find(fd) == my_openFT.end() )
+		return -1;
+	my_file fi = my_openFT.find(fd)->second;
+
+	//Update fields in the stat struct from info in the inode struct
+	//buf.st_dev = fi.f_inode.
+	buf->st_ino = fi.f_inode->i_ino;
+	buf->st_mode = fi.f_inode->i_mode;
+	//buf.st_nlink
+	//buf.st_uid
+	//buf.st_gid
+	//buf.st_dev
+	//buf.st_size
+	//buf.st_blksize
+	//buf.st_blocks
+	//buf.st_atime
+	//buf.st_mtime
+	//buf.st_ctime
+
+	return 0;
 }
 
 int my_fsync(int fd)
@@ -308,7 +328,29 @@ int my_lsetxattr(const char *path, const char *name, const void *value, size_t s
 
 int my_lstat(const char *path, struct stat *buf)
 {
-	return -1;
+	//Gets inode number
+	long inum = get_inode_number((char*)path);
+
+	//Gets inode from inum
+	if(my_ilist.find(inum) == my_ilist.end())
+		return -1;
+	my_inode temp_inode = my_ilist.find(inum)->second;
+
+	//Update fields in the stat struct from info in the inode struct
+	//buf.st_dev = fi.f_inode.
+	buf->st_ino = temp_inode.i_ino;
+	buf->st_mode = temp_inode.i_mode;
+	//buf.st_nlink
+	//buf.st_uid
+	//buf.st_gid
+	//buf.st_dev
+	//buf.st_size
+	//buf.st_blksize
+	//buf.st_blocks
+	//buf.st_atime
+	//buf.st_mtime
+	//buf.st_ctime
+
 }
 
 int my_mkdir(const char *pathname, mode_t mode)
@@ -408,7 +450,7 @@ ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 	//Copy str into the passed in buf
 	strcpy((char*)buf, str.c_str());
 
-	//Return the number of bytes readß
+	//Return the number of bytes read
 	return (ssize_t)bytes_read;
 }
 
