@@ -424,6 +424,35 @@ ssize_t my_readlink(const char *path, char *buf, size_t bufsiz)
 
 int my_rename(const char *oldpath, const char *newpath)
 {
+	if(get_inode_number((char*)oldpath) == -1)
+		return -1;
+	
+	std::vector<std::string> dir_names = split((char*)oldpath, "/");
+	std::string fname = dir_names.at(dir_names.size() - 1);
+	dir_names.pop_back();
+	std::string str = "/";
+	
+	// get the new file name from the newpath received
+	std::vector<std::string> new_names = split((char*)newpath, "/");
+	std::string newname = new_names.at(new_names.size() - 1);
+	
+	// construct the parent folder from dir_names content
+	for(int i = 0; i < dir_names.size(); i++)
+		str += dir_names.at(i) + "/";
+	long i_num = get_inode_number((char*)str.c_str());
+	
+	if(i_num == -1)//parent doesn't exist
+		return -1;
+	if(my_ilist.find((unsigned long)i_num) == my_ilist.end())//inode not found in the file table
+		return -1;
+	
+	my_inode temp_inode = my_ilist.find((unsigned long)i_num)->second;
+	std::vector<my_dirent>::iterator it = temp_inode.dirent_buf.begin();
+	while(it++ != temp_inode.dirent_buf.end())
+		if(strcmp((char*)fname.c_str(), it->d_name) == 0){
+			strcpy(it->d_name, newname.c_str());
+			return 0;
+		}
 	return -1;
 }
 
