@@ -384,9 +384,26 @@ ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 	return (ssize_t)bytes_read;
 }
 
+//Write count bytes from buf into the file starting at file[offset]
 ssize_t my_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
-	return -1;
+	//Get the open file using the file descriptor
+	my_file tempFile = my_openFT.find((unsigned long) fd)->second;
+	//Get the file buffer from the inode
+	std::vector<char> tempBuf = tempFile.f_inode->buf;
+
+	//Calculalte the possible number of bytes we can write
+	int bytes_to_write = ( (int)count > tempBuf.size() ? strlen((char*)buf) : (int)count );
+
+	//Write from buf to file[offset:offset+count]
+	//for(index = (int)offset; index < offset + bytes_to_write; index++)
+	for(int index = 0; index < bytes_to_write; index++)
+	{
+		tempFile.f_inode->buf[index + offset] = ((char*)buf)[index];
+	}
+
+	//Return the number of bytes we wrote
+	return (ssize_t)bytes_to_write;
 }
 
 struct dirent *my_readdir(DIR *dirp)
