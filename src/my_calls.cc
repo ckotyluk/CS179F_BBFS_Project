@@ -177,7 +177,12 @@ int my_access(const char *pathname, int mode)
 
 int my_chmod(const char *path, mode_t mode)
 {
-	return -1;
+	if (get_inode_number((char*)path) == -1)
+		return 0;
+
+	unsigned long i_num = (unsigned long)get_inode_number((char*)path);
+	my_ilist.find(i_num)->second.i_mode = mode;
+	return 0;
 }
 
 int my_chown(const char *path, uid_t owner, gid_t group)
@@ -351,7 +356,9 @@ DIR *my_opendir(const char *name)
 {
 	//return -1;
 }
-
+// my_pread: reads up to COUNT bytes from file descriptor FD
+// at offset OFFSET (from the start of the file) into the buffer
+// starting at BUF.
 ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 {
 	// grab the my_file corresponding to the opened file whose FD is 
