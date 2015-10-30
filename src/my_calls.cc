@@ -84,6 +84,12 @@ std::vector<std::string> split(const std::string s, const std::string pat)
 long get_inode_number(char* pathname){
 	std::vector<std::string> dir_names = split(pathname, "/");
 	
+	//my_inode root = my_ilist.find(0)->second;
+
+	//gets the root inode and return -1 if not found
+	
+	if(my_ilist.find(0) == my_ilist.end())
+		return -1;
 	my_inode root = my_ilist.find(0)->second;
 	
 	//when the dir_names is empty / was the pathname
@@ -111,6 +117,10 @@ long get_inode_number(char* pathname){
 				return -1;
 			}
 
+			//temp = my_ilist.find(inum_temp)->second;
+			//Update to the current inode, return -1 if not found
+			if( my_ilist.find(inum_temp) == my_ilist.end() )
+				return -1;
 			temp = my_ilist.find(inum_temp)->second;
 		}
 		return temp.i_ino;
@@ -232,7 +242,10 @@ int my_creat(const char *pathname, mode_t mode)
 	strcpy(new_dirent.d_name, fname.c_str());
 
 	//Get root inode, assuming root inum is 0
-	my_inode root = (my_ilist.find(0)->second);
+	//my_inode root = (my_ilist.find(0)->second);
+	if( my_ilist.find(0) == my_ilist.end() )
+		return -1;
+	my_inode root = my_ilist.find(0)->second;
 
 	if(dir_names.size() == 0)
 	//dir_names is empty, so parent dir is root(/)
@@ -255,7 +268,27 @@ int my_fdatasync(int fd)
 
 int my_fstat(int fd, struct stat *buf)
 {
-	return -1;
+	//Get the file from the file descriptor
+	if( my_openFT.find(fd) == my_openFT.end() )
+		return -1;
+	my_file fi = my_openFT.find(fd)->second;
+
+	//Update fields in the stat struct from info in the inode struct
+	//buf.st_dev = fi.f_inode.
+	buf->st_ino = fi.f_inode->i_ino;
+	buf->st_mode = fi.f_inode->i_mode;
+	//buf.st_nlink
+	//buf.st_uid
+	//buf.st_gid
+	//buf.st_dev
+	//buf.st_size
+	//buf.st_blksize
+	//buf.st_blocks
+	//buf.st_atime
+	//buf.st_mtime
+	//buf.st_ctime
+
+	return 0;
 }
 
 int my_fsync(int fd)
@@ -295,7 +328,29 @@ int my_lsetxattr(const char *path, const char *name, const void *value, size_t s
 
 int my_lstat(const char *path, struct stat *buf)
 {
-	return -1;
+	//Gets inode number
+	long inum = get_inode_number((char*)path);
+
+	//Gets inode from inum
+	if(my_ilist.find(inum) == my_ilist.end())
+		return -1;
+	my_inode temp_inode = my_ilist.find(inum)->second;
+
+	//Update fields in the stat struct from info in the inode struct
+	//buf.st_dev = fi.f_inode.
+	buf->st_ino = temp_inode.i_ino;
+	buf->st_mode = temp_inode.i_mode;
+	//buf.st_nlink
+	//buf.st_uid
+	//buf.st_gid
+	//buf.st_dev
+	//buf.st_size
+	//buf.st_blksize
+	//buf.st_blocks
+	//buf.st_atime
+	//buf.st_mtime
+	//buf.st_ctime
+
 }
 
 int my_mkdir(const char *pathname, mode_t mode)
@@ -326,6 +381,9 @@ int my_open1(const char *pathname, int flags)
 	}
 
 	//Get inode for path
+	//my_inode *temp_inode = &my_ilist.find(temp_inum)->second;
+	if( my_ilist.find(temp_inum) == my_ilist.end())
+		return -1;
 	my_inode *temp_inode = &my_ilist.find(temp_inum)->second;
 
 
@@ -349,6 +407,8 @@ int my_open2(const char *pathname, int flags, mode_t mode)
 	}
 
 	//Get inode for path
+	if(my_ilist.find(temp_inum) == my_ilist.end() )
+		return -1;
 	my_inode *temp_inode = &my_ilist.find(temp_inum)->second;
 
 
@@ -371,7 +431,10 @@ ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 {
 	// grab the my_file corresponding to the opened file whose FD is 
 	// passed through parameter fd
+	if(my_openFT.find((unsigned long)fd) == my_openFT.end() )
+		return -1;
 	my_file tempFile = my_openFT.find((unsigned long)fd)->second;
+
 	std::string str = "";
 	int index;
 	std::vector<char> tempBuf = tempFile.f_inode->buf;
@@ -387,6 +450,7 @@ ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 	//Copy str into the passed in buf
 	strcpy((char*)buf, str.c_str());
 
+	//Return the number of bytes read
 	return (ssize_t)bytes_read;
 }
 
@@ -394,6 +458,8 @@ ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 ssize_t my_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
 	//Get the open file using the file descriptor
+	if( my_openFT.find((unsigned long) fd) == my_openFT.end() )
+		return -1;
 	my_file tempFile = my_openFT.find((unsigned long) fd)->second;
 	//Get the file buffer from the inode
 	std::vector<char> tempBuf = tempFile.f_inode->buf;
