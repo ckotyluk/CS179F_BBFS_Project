@@ -354,7 +354,27 @@ DIR *my_opendir(const char *name)
 
 ssize_t my_pread(int fd, void *buf, size_t count, off_t offset)
 {
-	return -1;
+	// grab the my_file corresponding to the opened file whose FD is 
+	// passed through parameter fd
+	my_file tempFile = my_openFT.find((unsigned long)fd)->second;
+	std::string str = "";
+	int index;
+	std::vector<char> tempBuf = tempFile.f_inode->buf;
+	
+	// if count > tempBuf.size() then read the whole file and
+	// return the file size as the number of bytes read
+	int bytes_read = 0;
+	if ((int)count > tempBuf.size())
+		bytes_read = tempBuf.size();
+	else
+		bytes_read = (int)count;
+	
+	for(index = (int)offset; index < bytes_read + (int)offset; index++)
+		str += tempBuf.at(index);
+	
+	strcpy((char*)buf, str.c_str());
+
+	return (ssize_t)bytes_read;
 }
 
 ssize_t my_pwrite(int fd, const void *buf, size_t count, off_t offset)
