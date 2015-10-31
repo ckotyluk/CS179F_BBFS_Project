@@ -81,7 +81,8 @@ std::vector<std::string> split(const std::string s, const std::string pat)
 	}
 }
 
-long get_inode_number(char* pathname){
+long get_inode_number(char* pathname)
+{
 	std::vector<std::string> dir_names = split(pathname, "/");
 	
 	//my_inode root = my_ilist.find(0)->second;
@@ -131,9 +132,6 @@ long get_inode_number(char* pathname){
 //inode functions
 unsigned long inode_init(mode_t i_m)
 {
-	//Create new inode
-	//my_inode in;
-	
 	//Find the current highest inode value used
 	unsigned long max_inode = 0;
 	for(std::map<unsigned long, my_inode>::iterator it = my_ilist.begin(); it != my_ilist.end(); ++it)
@@ -355,7 +353,58 @@ int my_lstat(const char *path, struct stat *buf)
 
 int my_mkdir(const char *pathname, mode_t mode)
 {
-	return -1;
+	// First check if dir already exists
+	if(get_inode_number((char*)pathname) != -1)
+	{
+		std::cout << "Error -- my_mkdir(): directory " << pathname << " already exists!" << std::endl;
+		return -1;
+	}
+	
+	std::vector<std::string> dir_names = split(pathname, "/");
+	if(dir_names.size() == 0) // pathname == root
+	{
+		std::cout << "Error -- my_mkdir(): pathname needs to include root." << std::endl;
+		return -1;
+	}
+	
+	unsigned long parent_inode = 0;
+	
+	// At root level in directory structure, so set parent inode to root
+	if(dir_names.size() == 1)
+	{
+		parent_inode = 0;
+	}
+	// There is a directory between this and root	
+	else if(dir_names.size() > 1)
+	{
+		std::string parent_path;
+		
+		// Construct path to parent
+		for(int i = 0; i < dir_names.size()-1; ++i)
+		{
+			parent_path += ("/" + dir_names[i]);
+		}
+		parent_inode = get_inode_number((char*)parent_path.c_str());
+		
+		// If parent doesn't exist, likely an invalid path
+		if(parent_inode == -1)
+		{
+			std::cout << "Error -- my_mkdir(): directory structure " << parent_path << " does not exist!" << std::endl;
+			return -1;
+		}
+	}
+	
+	// Create inode and dirent for the new directory
+	my_dirent new_dirent;
+	
+	unsigned long new_inode = inode_init(mode);
+	new_dirent.d_ino = new_inode;
+	strcpy(new_dirent.d_name, dir_names.back().c_str());
+	
+	my_ilist.find(parent_inode)->second.dirent_buf.push_back(new_dirent);
+	
+	// Tells bbfs this was successful and could potentially be useful for other functions
+	return new_inode;
 }
 
 int my_mkfifo(const char *pathname, mode_t mode)
