@@ -573,7 +573,66 @@ int my_rename(const char *oldpath, const char *newpath)
 
 int my_rmdir(const char *pathname)
 {
-	return -1;
+	unsigned long current_inode = get_inode_number((char*)pathname);
+	
+	if(current_inode == -1) // does not exist
+	{
+		std::cout << "Error -- my_rmdir(): directory " << pathname << " does not exist!" << std::endl;
+		return -1;
+	}
+	else if(current_inode == 0) // path is root
+	{
+		std::cout << "Error -- my_rmdir(): cannot remove root!" << std::endl;
+		return -1;
+	}
+	if(my_ilist.find(current_inode)->second.dirent_buf.size() > 0) // Check for empty directory
+	{
+		std::cout << "Error -- my_rmdir(): cannot remove non-empty directory!" << std::endl;
+		return -1;
+	}
+	
+	std::vector<std::string> dir_names = split(pathname, "/");
+	std::string parent_path;
+		
+	// Construct path to parent
+	for(int i = 0; i < dir_names.size()-1; ++i)
+	{
+		parent_path += ("/" + dir_names[i]);
+	}
+	unsigned long parent_inode = get_inode_number((char*)parent_path.c_str());
+	
+	// If parent doesn't exist, likely an invalid path
+	if(parent_inode == -1)
+	{
+		std::cout << "Error -- my_rmdir(): parent " << parent_path << " does not exist!" << std::endl;
+		return -1;
+	}
+	
+	// Go into parent and remove dirent
+	// First find location of dirent to remove
+	std::vector<my_dirent> *parent_direntbuf = &my_ilist.find(parent_inode)->second.dirent_buf;
+	unsigned long found_loc = -1;
+	
+	for(unsigned long i = 0; i < parent_direntbuf->size(); ++i)
+	{
+		if((*parent_direntbuf)[i].d_name == dir_names.back())
+		{
+			found_loc = i;
+			break;
+		}
+	}
+	if(found_loc == -1)
+	{
+		std::cout << "Error -- my_rmdir(): directory " << parent_path << " does not exist in " << parent_path << " !" << std::endl;
+		return -1;
+	}
+	// Remove dirent from parent
+	parent_direntbuf->erase(parent_direntbuf->begin() + found_loc);
+	
+	// Remove inode from my_ilist
+	my_ilist.erase(current_inode);
+	
+	return 0;
 }
 
 int my_statvfs(const char *path, struct statvfs *buf)
