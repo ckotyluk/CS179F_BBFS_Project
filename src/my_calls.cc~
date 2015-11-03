@@ -40,7 +40,7 @@ struct my_inode
 struct my_file
 {
 	unsigned long	f_desc;			// File descriptor
-	mode_t 			f_mode;			// Permissions modes for the file
+	mode_t 		f_mode;			// Permissions modes for the file
 	unsigned long	f_pos;			// Current position(offset) in the file
 	unsigned short 	flags;			// Access flags for the file
 	unsigned short 	f_count;		// Access count
@@ -573,66 +573,55 @@ int my_rename(const char *oldpath, const char *newpath)
 
 int my_rmdir(const char *pathname)
 {
-	unsigned long current_inode = get_inode_number((char*)pathname);
+	//checks if inode exists in inode list
+	//if it doesn't then we can't remove, if it
+	//does then we can continue to remove
+	my_inode tmp_inode_to_rm;
+	if(get_inode_number((char*)pathname) == -1)
+	{
+		std::cout << "Error -- my_rmdir(): directory " << pathname << " doesn't exist!" << std::endl;
+		return -1;
+	}
+	else
+	{
+		my_inode tmp_inode_to_rm = get_inode_number((char*)pathname);
+	}	
+	unsigned long parent_inode = 0;
+	unsigned long curr_inode;
+	// At root level in directory structure, so set parent inode to root
+	//we should fail in this case since we don't want to remove the root
+	//rather than check sz, check if pathname = root;
+	char* dont_rm = "/";
+	if(dont_rm == pathname || dir_names.size() == 0)
+	{
+		//curr_inode = 0;
+		std::cout <<"Error --my_rmdir(): directory " << pathname << " can't remove root!" << std::endl;
+		return -1;
+	}
 	
-	if(current_inode == -1) // does not exist
-	{
-		std::cout << "Error -- my_rmdir(): directory " << pathname << " does not exist!" << std::endl;
-		return -1;
-	}
-	else if(current_inode == 0) // path is root
-	{
-		std::cout << "Error -- my_rmdir(): cannot remove root!" << std::endl;
-		return -1;
-	}
-	if(my_ilist.find(current_inode)->second.dirent_buf.size() > 0) // Check for empty directory
-	{
-		std::cout << "Error -- my_rmdir(): cannot remove non-empty directory!" << std::endl;
-		return -1;
-	}
+	//check permissions
+	//my_ilist.find(parent_inode)->second.dirent_buf.push_back(new_dirent);	
+	//my_ilist.find()
 	
+	//rm from inode list
+	curr_inode=my_ilist.find(tmp_inode_to_rm);
+	my_ilist.erase(curr_inode);
+
 	std::vector<std::string> dir_names = split(pathname, "/");
-	std::string parent_path;
+	//std::string dir_to_rm = dir_names.at(dir_names.size()-1);
+
+	for(int i = 0; i < dirent_buf.size(); i++)
+	{
+		if(dirent_buf[i] == )
+		//if(dirent_buf[i]
+	}	
 		
-	// Construct path to parent
-	for(int i = 0; i < dir_names.size()-1; ++i)
-	{
-		parent_path += ("/" + dir_names[i]);
-	}
-	unsigned long parent_inode = get_inode_number((char*)parent_path.c_str());
-	
-	// If parent doesn't exist, likely an invalid path
-	if(parent_inode == -1)
-	{
-		std::cout << "Error -- my_rmdir(): parent " << parent_path << " does not exist!" << std::endl;
-		return -1;
-	}
-	
-	// Go into parent and remove dirent
-	// First find location of dirent to remove
-	std::vector<my_dirent> *parent_direntbuf = &my_ilist.find(parent_inode)->second.dirent_buf;
-	unsigned long found_loc = -1;
-	
-	for(unsigned long i = 0; i < parent_direntbuf->size(); ++i)
-	{
-		if((*parent_direntbuf)[i].d_name == dir_names.back())
-		{
-			found_loc = i;
-			break;
-		}
-	}
-	if(found_loc == -1)
-	{
-		std::cout << "Error -- my_rmdir(): directory " << parent_path << " does not exist in " << parent_path << " !" << std::endl;
-		return -1;
-	}
-	// Remove dirent from parent
-	parent_direntbuf->erase(parent_direntbuf->begin() + found_loc);
-	
-	// Remove inode from my_ilist
-	my_ilist.erase(current_inode);
-	
-	return 0;
+	//rmdir site:  http://pubs.opengroup.org/onlinepubs/009695399/functions/rmdir.html
+	//may need to check if directory is empty
+	//rm -Rf may handle above case, since it recursively deletes
+	//until 
+	//we'll need to remove inode from ilist	
+	return -1;
 }
 
 int my_statvfs(const char *path, struct statvfs *buf)
