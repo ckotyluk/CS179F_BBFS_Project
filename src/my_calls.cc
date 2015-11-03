@@ -50,6 +50,21 @@ struct my_file
 		: f_desc(fd), f_mode(m), f_pos(pos), flags(fl), f_count(0), f_inode(i) {}
 };
 
+//Struct for an open dir
+struct my_dir
+{
+	//unsigned long	d_desc;			// Dir descriptor
+	mode_t 			d_mode;			    // Permissions modes for the directory
+	unsigned long	d_pos;			  // Current position(offset) in the directory
+	unsigned short 	d_flags;		// Access flags for the directory
+	unsigned short 	d_count;		// Access count
+
+	struct my_inode *d_inode;		// Pointer to the directory inode
+	my_dir(mode_t m, unsigned long pos, unsigned short fl, struct my_inode* i) 
+		: d_mode(m), d_pos(pos), d_flags(fl), d_count(0), d_inode(i) {}
+};
+
+
 std::map<unsigned long, my_inode> my_ilist;
 
 std::map<unsigned long, my_file> my_openFT; // Open file table
