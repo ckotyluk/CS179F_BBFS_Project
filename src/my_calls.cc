@@ -321,6 +321,11 @@ ssize_t my_lgetxattr(const char *path, const char *name, void *value, size_t siz
 
 int my_link(const char *oldpath, const char *newpath)
 {
+	// oldpath - destination,	newpath - source
+	// Check if oldpath is valid, get inode #
+	// Check if newpath is not valid (shortcut does not already exist), get parent inode
+	// Go to parent dirent_buf and add dir entry with name = end of newpath, inode = inode # of oldpath
+	
 	return -1;
 }
 
@@ -667,6 +672,13 @@ int my_truncate(const char *path, off_t length)
 
 int my_unlink(const char *pathname)
 {
+	// Check if pathname is valid, if so return current inode
+	// Go to parent of current inode
+	// Remove dirent
+	// Decrement count in current inode
+	// If count is 0, delete inode
+	// Ignores permissions
+	
 	return -1;
 }
 
