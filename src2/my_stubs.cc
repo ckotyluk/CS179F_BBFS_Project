@@ -56,18 +56,20 @@
 #include <list>
 #include <iostream>  
 
-
 using namespace std;
+
+// Prototypes for local functions.  There's no need to put these into
+// my_stubs.H, since these functions are local to my_stubs.cc.
+void show_stat( struct stat& root );
+void initialize();                  
+ino_t find_ino( string path );      
+
 
 // Here is a convenient macro for debugging.  cdbg works like cerr but 
 // prefixes the error message with its location: line number and function
 // name.
 #define cdbg cerr <<"\nLn "<<dec<<  __LINE__ << " of "  << __FUNCTION__ << ": "
 
-void show_stat( struct stat& root );  // prototype
-void initialize();                    // prototype
-ino_t find_ino( string path );        // prototype
-// The above should go into my_stubs.H
 
 string cwd;   // to hold name of current working directory but not used yet.
 
@@ -85,7 +87,7 @@ public:
   // one or the other of the following (data and frame) should be empty.
   string data;                          // for use by regular files
   vector<dirent_frame> dentries;        // for use by directories
-  //list<dirent_frame> dentries;        // it'd be cleaner to make this a list
+  // list<dirent_frame> dentries;        // it'd be cleaner to make this a list
 };
 
 
@@ -247,7 +249,7 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
 // called at line #186 of bbfs.c
 int my_mkdir( const char *path, mode_t mode ) {
   // returns an error code.
-  // cdbg << "mkdir has been called with path \"" << path<< "\" and mode " \
+  cdbg << "mkdir has been called with path \"" << path<< "\" and mode " \
        << oct <<  mode << endl;
 
   // Now we create and configure this directory's metadata (inode/struct).
@@ -258,6 +260,7 @@ int my_mkdir( const char *path, mode_t mode ) {
   umask(old_umask);                       // restores umask to old value
   md.st_dev     = 100;                /* ID of device containing file */
   md.st_ino     = the_ino;                            /* inode number */
+  cdbg << "mode = " << oct << mode << " old_umask = " << oct << old_umask << endl;
   md.st_mode    = S_IFDIR | ( mode & ~ old_umask);      /* protection */
   md.st_nlink   = 1;                          /* number of hard links */
   md.st_uid     = geteuid();                      /* user ID of owner */
@@ -319,7 +322,41 @@ int my_unlink( const char *path ) {
 
 // called at line #220 of bbfs.c
 int my_rmdir( const char *path ) {
-  return err;   
+  // See http://linux.die.net/man/2/rmdir for a full list of all 13
+  // possible errors for rmdir.
+
+  ino_t fh = find_ino( path );
+  File the_dir = ilist.entry[fh];
+  if ( ! S_ISDIR(the_dir.metadata.st_mode) ) { 
+    cdbg << "does not exist\n";
+    errno = ENOTDIR;
+    return err;
+  }
+  if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
+    cdbg << "not empty\n";
+    errno = ENOTEMPTY;
+    return err;
+  }
+  vector<string> vs = split( path, "/" );
+  vs.pop_back();
+  string parent_path = join(vs,"/");
+  parent_path = "/" + parent_path;  // FIX this hack
+  // cdbg << "Parent path is " << parent_path << endl;
+  ino_t parent = find_ino(parent_path);
+  // cdbg << "Parent ino is " << parent << endl;
+  vector<dirent_frame>& v = ilist.entry[parent].dentries;
+  for(auto it = v.begin(); it != v.end(); ++it ) {
+    // We erase him from his parent directory.
+    if ( it->the_dirent.d_ino == fh ) {
+      // cdbg << "erasing " << fh << " from " << parent << endl;
+      v.erase(it);  
+      break;  // Must stop iterating now!
+    }
+  }    
+  if ( --the_dir.metadata.st_nlink == 0 ) {
+    ilist.entry.erase(fh);  // get rid of this file
+  }
+  return ok;
 }  
 
 // called at line #241 of bbfs.c
@@ -512,7 +549,6 @@ MY_DIR* fopendir( ino_t fh ) {  // not exported
 // called at lines #707 and #726 of bbfs.c
 dirent* my_readdir( MY_DIR* dirp ) {  
   vector<dirent_frame> v = ilist.entry[dirp->fh].dentries;
-  //list<dirent_frame> v = ilist.entry[dirp->fh].dentries;
   int tmp = dirp->index++;  // post increment dirp*'s index.
   return tmp == v.size() ? 0 : & v[tmp].the_dirent;
 }
@@ -908,15 +944,17 @@ int main() {
     cout << "Which op and file? ";
     cin >> op >> file;
     if        ( op == "help" ) { // lists available ops
+		cout << "Currently implemented test commands: \n";
+		cout << "mkdir, rmdir, show, ls, lstat \n";
     } else if (op == "play"  ) { // accepts input from file instead of keyboard
     } else if (op == "save"  ) { // saves dialog to specified file
     } else if (op == "mkdir" ) { // prompts for protection mode
       cout << "Specify file permissions in octal: ";
       mode_t mode; 
-      cin >> mode;
-      mode_t old_umask = umask(0);
-      umask(old_umask);
-      my_mkdir(file.c_str(), 040000 | (mode & old_umask ) );
+      cin >> oct >> mode;
+      my_mkdir(file.c_str(), mode );
+    } else if (op == "rmdir"  ) { // shows file's metadata
+      my_rmdir(file.c_str() );
     } else if (op == "show"  ) { // shows file's metadata
       show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
     } else if (op == "ls"  ) { // lists the specified directory. 
@@ -933,11 +971,12 @@ int main() {
     } else {
       cout << "Correct usage is: op pathname,\n"; 
       cout << "where \"op\" is one of the following:\n";
-      cout << "help, help, play, save, mkdir, show, exit.\n";
+      cout << "help, play, save, mkdir, rmdir, show, ls, lstat, break, exit.\n";
       cout << "For example, type \"exit now\" to exit.\n";
     }
   }  
 
+  // Continuation of main(), which is reacable via the "break" op.
   show_stat( ilist.entry[2].metadata );  // all looks good here.
   cdbg << "Now we call lstat on \"/\" and &mystat" << endl;
   struct stat mystat;
