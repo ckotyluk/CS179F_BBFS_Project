@@ -1,11 +1,13 @@
 ls .
-creat test1
-700
-mkdir temp
-700
+creat a
+400
+ls ..
 ls .
-chown test1
+ls ..
+mkdir t
 100
-123
 ls .
- 
+access a
+100
+access a
+400

@@ -457,8 +457,30 @@ int my_lremovexattr( const char *path, const char *name ) {
 
 
 // called at line #826 of bbfs.c
+//Checks file perms with your perms
+//If all perms match, return 0
+//If not, returns -1
 int my_access( const char *fpath, int mask ) {
-    return an_err;  
+    
+    ino_t fh = find_ino(fpath);
+    vector<string> v = split(fpath,"/");
+    string filename = v.back();
+
+    //Get stat to get the perms
+    struct stat st;
+    if ( my_fstat( fh, &st ) != 0 )
+    {
+        cerr << "Cannot stat file: " << filename
+             << ": " << strerror(errno) << endl;
+        return an_err;
+    }
+
+    //Check that the perms in mask match the user perms for the file
+    if( (st.st_mode & S_IRUSR) != (mask & S_IRUSR) ) return an_err;
+    if( (st.st_mode & S_IWUSR) != (mask & S_IWUSR) ) return an_err;
+    if( (st.st_mode & S_IXUSR) != (mask & S_IXUSR) ) return an_err;
+
+    return ok;  
 }  
 
 // called at line #856 of bbfs.c
@@ -1132,10 +1154,21 @@ int main(int argc, char* argv[] ) {
             cout << "Specify group id: ";
             (myin.good() ? myin : cin) >> dec >> g;
             record << dec << g << endl;
-            
+
             my_chown(file.c_str(), u, g);
         }
-        else {
+        else if (op == "access" )
+        {
+            cout << "Specify permissions to check: ";
+            mode_t mode; 
+            // cin >> oct >> mode;
+            (myin.good()? myin : cin) >> oct >> mode;
+            record << oct << mode << endl;
+            int ret = my_access(file.c_str(), mode);
+            cout << ( ret == 0 ? "All requested permissions granted" : "Some permissions failed" ) << endl;
+        }
+        else
+        {
             cout << "Correct usage is: op pathname,\n"; 
             cout << "where \"op\" is one of the following:\n";
             cout << "help, play, save, mkdir, show, break, lslr, exit.\n";
