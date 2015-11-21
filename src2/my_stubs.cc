@@ -357,7 +357,12 @@ int my_link(const char *path, const char *newpath) {
 
 // called at line #296 of bbfs.c
 int my_chmod(const char *path, mode_t mode) {
-    return an_err;  
+    ino_t fh = find_ino(path);
+    if(fh == -1)
+        return an_err;  
+
+    ilist.entry[fh].metadata.st_mode = mode;
+    return ok;
 }  
 
 // called at line #314 of bbfs.c
@@ -1133,7 +1138,7 @@ int main(int argc, char* argv[] ) {
         { 
             visit(file);
         }
-        else if (op == "creat" ) //Creates a regular file
+        else if (op == "creat" || op == "touch" ) //Creates a regular file
         {
             cout << "Specify file permissions in octal: ";
             mode_t mode; 
@@ -1156,6 +1161,15 @@ int main(int argc, char* argv[] ) {
             record << dec << g << endl;
 
             my_chown(file.c_str(), u, g);
+        }
+        else if (op == "chmod" )
+        {
+            cout << "Specify file permissions in octal: ";
+            mode_t mode; 
+            // cin >> oct >> mode;
+            (myin.good()? myin : cin) >> oct >> mode;
+            record << oct << mode << endl;
+            my_chmod(file.c_str(), mode );
         }
         else if (op == "access" )
         {
