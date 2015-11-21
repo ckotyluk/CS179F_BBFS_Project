@@ -39,7 +39,7 @@
 
 // Here we include
 // C stuff
-#include "my_stubs.h"
+#include "my_stubs.H"
 #include </usr/include/linux/fs.h>  // needed for compilation on vagrant
 #include <sys/stat.h>  // this has our official definition of stat
 #include <dirent.h>    // this has our official definition of dirent
@@ -47,14 +47,19 @@
 #include <pwd.h>
 #include <grp.h>
 #include <time.h>
+#include <err.h>
 // C++ stuff
+#include <iostream>
+#include <fstream>
 #include <cassert>
 #include <sstream>
 #include <vector>
+#include <string.h>
 #include <string>
 #include <map>
 #include <list>
 #include <iostream>  
+#include <errno.h>
 
 using namespace std;
 
@@ -74,445 +79,404 @@ ino_t find_ino( string path );
 string cwd;   // to hold name of current working directory but not used yet.
 
 struct dirent_frame { // The official definition of dirent puts its users
-  // into "undefined behavior"
-  dirent the_dirent;
-  char overflow[NAME_MAX]; // to catch overflow from one-char name field.
+    // into "undefined behavior"
+    dirent the_dirent;
+    char overflow[NAME_MAX]; // to catch overflow from one-char name field.
 };
 
 
 class File {
 public:
-  //inode metadata;                     // for use by all files
-  struct stat metadata;                 // for use by all files
-  // one or the other of the following (data and frame) should be empty.
-  string data;                          // for use by regular files
-  vector<dirent_frame> dentries;        // for use by directories
-  // list<dirent_frame> dentries;        // it'd be cleaner to make this a list
+    //inode metadata;                     // for use by all files
+    struct stat metadata;                 // for use by all files
+    // one or the other of the following (data and frame) should be empty.
+    string data;                          // for use by regular files
+    vector<dirent_frame> dentries;        // for use by directories
+    // list<dirent_frame> dentries;        // it'd be cleaner to make this a list
 };
 
 
 class Ilist {
 public:
-  int count;
-  map<ino_t,File> entry;
-  int next() {
-    static int count = 2;  // ino counter stats at 2.
-    return count++;
-  }
+    int count;
+    map<ino_t,File> entry;
+    int next() {
+        static int count = 2;  // ino counter stats at 2.
+        return count++;
+    }
 } ilist; 
 
 
 void initialize() { // now called from main() but could be called from
-                    // Ilist constructor (I think).
-  my_mkdir("/", 0700);
-  char tmp[PATH_MAX];
-  getcwd(tmp,998);
-  cwd = string(tmp);  
-  // cwd now hold the path to the initial current working directory.
-  // But, we don't yet use it.
+                                        // Ilist constructor (I think).
+    my_mkdir("/", 0700);
+    char tmp[PATH_MAX];
+    getcwd(tmp,998);
+    cwd = string(tmp);  
+    // cwd now hold the path to the initial current working directory.
+    // But, we don't yet use it.
 }
 
 void show_stat( struct stat& root ) {
-  // Displays the entries in a stat in same formats that Pfeiffer uses.
-  cerr << "SHOW\n";
-  cerr << "st_dev     = " << dec << root.st_dev     << endl;  
-  cerr << "st_ino     = "        << root.st_ino     << endl;  
-  cerr << "st_mode    = " << oct << root.st_mode    << endl;  
-  cerr << "st_nlink   = "        << root.st_nlink   << endl;  
-  cerr << "st_uid     = " << dec << root.st_uid     << endl;  
-  cerr << "st_gid     = " << dec << root.st_gid     << endl;  
-  cerr << "st_rdev    = "        << root.st_rdev    << endl;  
-  cerr << "st_size    = "        << root.st_size    << endl;  
-  cerr << "st_blksize = "        << root.st_blksize << endl;  
-  cerr << "st_blocks  = "        << root.st_blocks  << endl;  
-  cerr << "st_atime   = " << hex << root.st_atime   << endl;  
-  cerr << "st_mtime   = " << hex << root.st_mtime   << endl;  
-  cerr << "st_ctime   = " << hex << root.st_ctime   << endl;  
+    // Displays the entries in a stat in same formats that Pfeiffer uses.
+    cerr << "SHOW\n";
+    cerr << "st_dev     = " << dec << root.st_dev     << endl;  
+    cerr << "st_ino     = "        << root.st_ino     << endl;  
+    cerr << "st_mode    = " << oct << root.st_mode    << endl;  
+    cerr << "st_nlink   = "        << root.st_nlink   << endl;  
+    cerr << "st_uid     = " << dec << root.st_uid     << endl;  
+    cerr << "st_gid     = " << dec << root.st_gid     << endl;  
+    cerr << "st_rdev    = "        << root.st_rdev    << endl;  
+    cerr << "st_size    = "        << root.st_size    << endl;  
+    cerr << "st_blksize = "        << root.st_blksize << endl;  
+    cerr << "st_blocks  = "        << root.st_blocks  << endl;  
+    cerr << "st_atime   = " << hex << root.st_atime   << endl;  
+    cerr << "st_mtime   = " << hex << root.st_mtime   << endl;  
+    cerr << "st_ctime   = " << hex << root.st_ctime   << endl;  
 }; 
 
 
 inline  // a simple utility for splitting strings at a find-pattern.
 vector<string>
 split(const string s, const string pat ) {
-  string c;
-  vector<string> v;
-  int i = 0;
-  for (;;) {
-    int t = s.find(pat,i);
-    int j = ( t == string::npos ) ? s.size() : t;
-    string c = s.substr(i,j-i);
-    v.push_back(c);
-    i = j+pat.size();
-    if ( t == string::npos ) return v;
-  }
+    string c;
+    vector<string> v;
+    int i = 0;
+    for (;;) {
+        int t = s.find(pat,i);
+        int j = ( t == string::npos ) ? s.size() : t;
+        string c = s.substr(i,j-i);
+        v.push_back(c);
+        i = j+pat.size();
+        if ( t == string::npos ) return v;
+    }
 }
 
 inline  // joins vector of strings separating via a given pattern.
 string
 join( const vector<string> v, const string pat, int start=0, int end=-1 ) {
-  if ( end < 0 ) end += v.size();
-  //  assert ( start < v.size() );   // should throw an exception.
-  if ( start >= v.size() ) return "";
-  string s = v[start++];
-  for ( int i = start; i <= end; ++i )  s += pat + v[i];
-  return s;
+    if ( end < 0 ) end += v.size();
+    //  assert ( start < v.size() );   // should throw an exception.
+    if ( start >= v.size() ) return "";
+    string s = v[start++];
+    for ( int i = start; i <= end; ++i )  s += pat + v[i];
+    return s;
 }
 
 const int ok = 0;
-const int err = -1;
+const int an_err = -1;
 // Note that for pointer and ino_t return values, 0 indicates an error.
 
 
 // lstat is called at line #95 of bbfs.c
 int my_lstat( const char* path, struct stat *statbuf ) {
-  //cdbg << "lstat has been called and is calling find_ino on " << path << endl;
-  ino_t fh = find_ino(path);
-  //cdbg << "fh = " << fh << endl;
-  int retstat;
-  if ( fh == 0 ) {
-    retstat = err;
-  } else {
-    retstat = my_fstat(fh,statbuf);
-  }  
-  return retstat;
+    //cdbg << "lstat has been called and is calling find_ino on " << path << endl;
+    ino_t fh = find_ino(path);
+    //cdbg << "fh = " << fh << endl;
+    int retstat;
+    if ( fh == 0 ) {
+        retstat = an_err;
+    } else {
+        retstat = my_fstat(fh,statbuf);
+    }  
+    return retstat;
 }  
 
 // called at line #125 of bbfs.c
 int my_readlink( const char *path, char *link, size_t size ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #168 of bbfs.c.  See line #151.
 int my_mknod( const char *path, mode_t mode, dev_t dev ) {
-  cdbg <<"mknod been called with " << path << " " << oct << mode 
-       << " " << dev <<endl;
-  // Returns error code only.  It should make a file and install it
-  // into ilist and instrall a dentry for it in the parent directory.
+    //cdbg <<"mknod been called with " << path << " " << oct << mode 
+    //       << " " << dev <<endl;
+    // Returns error code only.  It should make a file and install it
+    // into ilist and instrall a dentry for it in the parent directory.
 
-  // To later get the handle for that inode use find_ino().  To get a
-  // pointer to that file use find_file.  IMHO, we should use it to
-  // creat both directories and regular files, but the man page leaves
-  // out directories.  So, I've not used it, and it's not been tested.
-
-  // This code has been copied over from my_mkdir.
-  int the_ino = ilist.next();     // Get and record this directory's ino
-  cdbg << "the_ino =" << the_ino << endl;
-  struct stat& md = ilist.entry[the_ino].metadata;   // Create this file
-  mode_t old_umask = umask(0);  // sets umask to 0 and returns old value
-  umask(old_umask);                       // restores umask to old value
-  md.st_dev     = dev;                /* ID of device containing file */
-  md.st_ino     = the_ino;                            /* inode number */
-  md.st_mode    = mode & ~ old_umask;          /* type and protection */
-  md.st_nlink   = 1;                          /* number of hard links */
-  md.st_uid     = geteuid();                      /* user ID of owner */
-  md.st_gid     = getegid();              /* group ID of owning group */
-  md.st_rdev    = 0;                   /* device ID (if special file) */
-  md.st_size    = 0;       /* size in bytes for reg-files and symlinks*/
-  md.st_blksize = 4096;              /* blocksize for file system I/O */
-  md.st_blocks  = 0;               /* number of 512B blocks allocated */
-  md.st_atime   = time(0);                     /* time of last access */
-  md.st_mtime   = time(0);               /* time of last modification */
-  md.st_ctime   = time(0);              /* time of last status change */
-
-  // The man page on STAT(2) is an excellent resource for configuring
-  // a stat, e.g., http://man7.org/linux/man-pages/man2/stat.2.html
-
-  // Now we push a dentry for this file onto the parent directory.
-  // except for root directory
-  vector<string> v = split( path, "/" );  // split the path
-  string the_name = v.back();
-  v.pop_back();
-
-  // Create, configure, and install a dentry for this new directory's
-  // in its parent directory.  But, omit this the first time, since
-  // the root directory has no parent.
-  cdbg << "the_ino =" << the_ino << endl;
-  ino_t parent_ino = find_ino(join(v,"/"));  
-  static bool first_time = true;  // static vars get initialized once
-  if ( first_time ) {                    
-    first_time = false;
-  } else {    // Omit this on first invocation, i.e., when making root
-    ino_t fh = find_ino(join(v,"/"));
-    dirent_frame df;                    
-    df.the_dirent.d_ino = the_ino; 
-    strcpy(df.the_dirent.d_name, the_name.c_str());  
-    //cdbg << "Inserting dentry for " << the_ino << " w name " \
-           << the_name << " into directory " << join(v,"/");
-    ilist.entry[fh].dentries.push_back(df);  // push df onto the back of parent
-  }
+    // To later get the handle for that inode use find_ino().  To get a
+    // pointer to that file use find_file.  IMHO, we should use it to
+    // creat both directories and regular files, but the man page leaves
+    // out directories.  So, I've not used it, and it's not been tested.
 
 
-  return ok;  
+    dev = 100;   // a device number that's unlikely to be used on vagrant
+
+    // Now we create and configure this File's metadata (inode/struct).
+    int the_ino = ilist.next();     // Get and record this directory's ino
+    struct stat& md = ilist.entry[the_ino].metadata;   // Create this file
+    mode_t old_umask = umask(0);  // sets umask to 0 and returns old value
+    umask(old_umask);                       // restores umask to old value
+    md.st_dev     = dev;                /* ID of device containing file */
+    md.st_ino     = the_ino;                            /* inode number */
+    //cdbg << "mode = " << oct << mode << " old_umask = " 
+    //     << oct << old_umask << endl;
+    md.st_mode    = ( mode & ~ old_umask);                /* protection */
+    md.st_nlink   = 1;                          /* number of hard links */
+    md.st_uid     = geteuid();                      /* user ID of owner */
+    md.st_gid     = getegid();              /* group ID of owning group */
+    md.st_rdev    = 0;                   /* device ID (if special file) */
+    md.st_size    = 0;       /* size in bytes for reg-files and symlinks*/
+    md.st_blksize = 4096;              /* blocksize for file system I/O */
+    md.st_blocks  = 0;               /* number of 512B blocks allocated */
+    md.st_atime   = time(0);                     /* time of last access */
+    md.st_mtime   = time(0);               /* time of last modification */
+    md.st_ctime   = time(0);              /* time of last status change */
+
+    // The man page on STAT(2) is an excellent resource for configuring
+    // a stat, e.g., http://man7.org/linux/man-pages/man2/stat.2.html
+
+
+    // Now we push a dentry for this directory onto the parent directory.
+    // except for root directory
+    vector<string> v = split( path, "/" );  // split the path
+    string the_name = v.back();
+    v.pop_back();
+
+    // Create, configure, and install a dentry for this new directory's
+    // in its parent directory.  But, omit this the first time, since
+    // the root directory has no parent.
+    // cdbg << "the_ino is " << the_ino << endl;
+    ino_t parent_ino = find_ino(join(v,"/"));  
+    static bool first_time = true;  // static vars get initialized once
+    if ( first_time ) {                    
+        first_time = false;
+    } else {    // Omit this on first invocation, i.e., when making root
+        ino_t fh = find_ino(join(v,"/"));
+        dirent_frame df;                    
+        df.the_dirent.d_ino = the_ino; 
+        strcpy(df.the_dirent.d_name, the_name.c_str());  
+        //cdbg << "Inserting dentry for " << the_ino << " w name " \
+                     << the_name << " into directory " << join(v,"/");
+        ilist.entry[fh].dentries.push_back(df);  // push df onto the back of parent
+    }
+
+    // Branch around this if not a directory
+    if ( S_ISDIR(mode) ) {
+        // Install dentries for . and .. within this new directory
+        dirent_frame df;
+
+        strcpy(df.the_dirent.d_name, ".");
+        df.the_dirent.d_ino  = the_ino;  
+        ilist.entry[the_ino].dentries.push_back(df);
+
+        strcpy(df.the_dirent.d_name, "..");
+        df.the_dirent.d_ino  = parent_ino;  // needs to be adjusted for root directory
+        ilist.entry[the_ino].dentries.push_back(df);
+    }
+
+    return ok;
+
 }  
 
-// TODO: Add error checking for existing file names.
+
 // called at line #186 of bbfs.c
 int my_mkdir( const char *path, mode_t mode ) {
-  // returns an error code.
-  cdbg << "mkdir has been called with path \"" << path<< "\" and mode " \
-       << oct <<  mode << endl;
-
-  // Now we create and configure this directory's metadata (inode/struct).
-
-  int the_ino = ilist.next();     // Get and record this directory's ino
-  struct stat& md = ilist.entry[the_ino].metadata;   // Create this file
-  mode_t old_umask = umask(0);  // sets umask to 0 and returns old value
-  umask(old_umask);                       // restores umask to old value
-  md.st_dev     = 100;                /* ID of device containing file */
-  md.st_ino     = the_ino;                            /* inode number */
-  cdbg << "mode = " << oct << mode << " old_umask = " << oct << old_umask << endl;
-  md.st_mode    = S_IFDIR | ( mode & ~ old_umask);      /* protection */
-  md.st_nlink   = 1;                          /* number of hard links */
-  md.st_uid     = geteuid();                      /* user ID of owner */
-  md.st_gid     = getegid();              /* group ID of owning group */
-  md.st_rdev    = 0;                   /* device ID (if special file) */
-  md.st_size    = 0;       /* size in bytes for reg-files and symlinks*/
-  md.st_blksize = 4096;              /* blocksize for file system I/O */
-  md.st_blocks  = 0;               /* number of 512B blocks allocated */
-  md.st_atime   = time(0);                     /* time of last access */
-  md.st_mtime   = time(0);               /* time of last modification */
-  md.st_ctime   = time(0);              /* time of last status change */
-
-  // The man page on STAT(2) is an excellent resource for configuring
-  // a stat, e.g., http://man7.org/linux/man-pages/man2/stat.2.html
-
-
-  // Now we push a dentry for this directory onto the parent directory.
-  // except for root directory
-  vector<string> v = split( path, "/" );  // split the path
-  string the_name = v.back();
-  v.pop_back();
-
-  // Create, configure, and install a dentry for this new directory's
-  // in its parent directory.  But, omit this the first time, since
-  // the root directory has no parent.
-  // cdbg << "the_ino is " << the_ino << endl;
-  ino_t parent_ino = find_ino(join(v,"/"));  
-  static bool first_time = true;  // static vars get initialized once
-  if ( first_time ) {                    
-    first_time = false;
-  } else {    // Omit this on first invocation, i.e., when making root
-    ino_t fh = find_ino(join(v,"/"));
-    dirent_frame df;                    
-    df.the_dirent.d_ino = the_ino; 
-    strcpy(df.the_dirent.d_name, the_name.c_str());  
-    //cdbg << "Inserting dentry for " << the_ino << " w name " \
-           << the_name << " into directory " << join(v,"/");
-    ilist.entry[fh].dentries.push_back(df);  // push df onto the back of parent
-  }
-
-  // Install dentries for . and .. within this new directory
-  dirent_frame df;
-
-  strcpy(df.the_dirent.d_name, ".");
-  df.the_dirent.d_ino  = the_ino;  
-  ilist.entry[the_ino].dentries.push_back(df);
-
-  strcpy(df.the_dirent.d_name, "..");
-  df.the_dirent.d_ino  = parent_ino;  // needs to be adjusted for root directory
-  ilist.entry[the_ino].dentries.push_back(df);
-
-  return ok;
+    // returns an error code.
+    //cdbg << "mkdir has been called with path \"" << path<< "\" and mode " \
+    //     << oct <<  mode << endl;
+    return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
 // called at line #203 of bbfs.cg
 int my_unlink( const char *path ) {
-  return err;   
+    return an_err;   
 }  
 
 // called at line #220 of bbfs.c
 int my_rmdir( const char *path ) {
-  // See http://linux.die.net/man/2/rmdir for a full list of all 13
-  // possible errors for rmdir.
+    // See http://linux.die.net/man/2/rmdir for a full list of all 13
+    // possible errors for rmdir.
 
-  ino_t fh = find_ino( path );
-  File the_dir = ilist.entry[fh];
-  if ( ! S_ISDIR(the_dir.metadata.st_mode) ) { 
-    cdbg << "does not exist\n";
-    errno = ENOTDIR;
-    return err;
-  }
-  if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
-    cdbg << "not empty\n";
-    errno = ENOTEMPTY;
-    return err;
-  }
-  vector<string> vs = split( path, "/" );
-  vs.pop_back();
-  string parent_path = join(vs,"/");
-  parent_path = "/" + parent_path;  // FIX this hack
-  // cdbg << "Parent path is " << parent_path << endl;
-  ino_t parent = find_ino(parent_path);
-  // cdbg << "Parent ino is " << parent << endl;
-  vector<dirent_frame>& v = ilist.entry[parent].dentries;
-  for(auto it = v.begin(); it != v.end(); ++it ) {
-    // We erase him from his parent directory.
-    if ( it->the_dirent.d_ino == fh ) {
-      // cdbg << "erasing " << fh << " from " << parent << endl;
-      v.erase(it);  
-      break;  // Must stop iterating now!
+    ino_t fh = find_ino( path );
+    File the_dir = ilist.entry[fh];
+    if ( ! S_ISDIR(the_dir.metadata.st_mode) ) { 
+        cdbg << "does not exist\n";
+        errno = ENOTDIR;
+        return an_err;
     }
-  }    
-  if ( --the_dir.metadata.st_nlink == 0 ) {
-    ilist.entry.erase(fh);  // get rid of this file
-  }
-  return ok;
+    if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
+        cdbg << "not empty\n";
+        errno = ENOTEMPTY;
+        return an_err;
+    }
+    vector<string> vs = split( path, "/" );
+    vs.pop_back();
+    string parent_path = join(vs,"/");
+    parent_path = "/" + parent_path;  // FIX this hack
+    // cdbg << "Parent path is " << parent_path << endl;
+    ino_t parent = find_ino(parent_path);
+    // cdbg << "Parent ino is " << parent << endl;
+    vector<dirent_frame>& v = ilist.entry[parent].dentries;
+    for(auto it = v.begin(); it != v.end(); ++it ) {
+        // We erase him from his parent directory.
+        if ( it->the_dirent.d_ino == fh ) {
+            // cdbg << "erasing " << fh << " from " << parent << endl;
+            v.erase(it);  
+            break;  // Must stop iterating now!
+        }
+    }    
+    if ( --the_dir.metadata.st_nlink == 0 ) {
+        ilist.entry.erase(fh);  // get rid of this file
+    }
+    return ok;
 }  
 
 // called at line #241 of bbfs.c
 int my_symlink(const char *path, const char *link) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #279 of bbfs.c
 int my_link(const char *path, const char *newpath) {
-  vector<string> v = split(string(newpath),"/");
-  string tail = v.back();
-  string dirpath = join(v, "/");
-  ino_t fh = find_ino(path);
-  if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-    errno = EPERM; 
-    return err; 
-  }
-  ino_t fh2 = find_ino(newpath);
-  if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
-    errno = EPERM; 
-    return err; 
-  }
-  ++ ilist.entry[fh].metadata.st_nlink;
-  // check for overflow.
-  dirent d;
-  d.d_ino = fh;
-  strcpy( d.d_name, tail.c_str() );
-  return ok;  
+    vector<string> v = split(string(newpath),"/");
+    string tail = v.back();
+    string dirpath = join(v, "/");
+    ino_t fh = find_ino(path);
+    if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
+        errno = EPERM; 
+        return an_err; 
+    }
+    ino_t fh2 = find_ino(newpath);
+    if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
+        errno = EPERM; 
+        return an_err; 
+    }
+    ++ ilist.entry[fh].metadata.st_nlink;
+    // check for overflow.
+    dirent d;
+    d.d_ino = fh;
+    strcpy( d.d_name, tail.c_str() );
+    return ok;  
 }  
 
 // called at line #296 of bbfs.c
 int my_chmod(const char *path, mode_t mode) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #314 of bbfs.c
 int my_chown(const char *path, uid_t uid, gid_t gid) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #331 of bbfs.c
 int my_truncate(const char *path, off_t newsize) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #349 of bbfs.c
 int my_utime(const char *path, struct utimbuf *ubuf) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #376 of bbfs.c.  Returns file handle not a file descriptor
 int my_open( const char *path, int flags ) {
-  // Write a function called "lookup" that takes a full path and the
-  // handle of a directory and returns the handle of the inode having
-  // that name.  To do so, split full path.  Then starting with the
-  // handle of the root directory, look up each segment in the
-  // directory whose handle you currently have.  Use a linear search
-  // that consists of successive calls to readdir() to find the
-  // corresponding directory entry, which has type struct dirent.
-  // Return its d_fileno, unless there's an error and then return -1.
+    // Write a function called "lookup" that takes a full path and the
+    // handle of a directory and returns the handle of the inode having
+    // that name.  To do so, split full path.  Then starting with the
+    // handle of the root directory, look up each segment in the
+    // directory whose handle you currently have.  Use a linear search
+    // that consists of successive calls to readdir() to find the
+    // corresponding directory entry, which has type struct dirent.
+    // Return its d_fileno, unless there's an error and then return -1.
 
-  // FINISH THIS
-  // static filecount = 0;
-  // ino_t fh = find_ino(path);  // 
-  // if ( fh >= 0 && ) {
-  //   return fh;
-  // } else if ( flags & CREAT ) {
-  //   // create a new inode with ino_t filecount++;
-  // }
+    // FINISH THIS
+    // static filecount = 0;
+    // ino_t fh = find_ino(path);  // 
+    // if ( fh >= 0 && ) {
+    //   return fh;
+    // } else if ( flags & CREAT ) {
+    //   // create a new inode with ino_t filecount++;
+    // }
 
 }  
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
-  return err;
+    return an_err;
 }  
 
 // called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
-  return err;
+    return an_err;
 }  
 
 // called at line #463 of bbfs.c
 int my_statvfs(const char *fpath, struct statvfs *statv) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #530 of bbfs.c
 int my_close( int fh ) {
-  return err;
+    return an_err;
 }  
 
 // called at line #553 of bbfs.c
 int my_fdatasync( ino_t fh ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #556 of bbfs.c
 int my_fsync( ino_t fh ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #575 of bbfs.c
 int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t size, int flags ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #592 of bbfs.c
 int my_lgetxattr( const char *fpath, const char *name, char *value, size_t size, int flags ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #613 of bbfs.c
 int my_llistxattr( const char *path, char *list, size_t size ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #634 of bbfs.c
 int my_lremovexattr( const char *path, const char *name ) {
-  return err;  
+    return an_err;  
 }  
 
 
 // called at line #826 of bbfs.c
 int my_access( const char *fpath, int mask ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #856 of bbfs.c
 int my_creat( const char *fpath, mode_t mode ) {
-  // we can create a file by using the right flags to open
-  return err;  
+    // we can create a file by using the right flags to open
+    
+    return my_mknod(fpath, (S_IFREG | mode), 100 );
 }  
 
 // called at line #887 of bbfs.c
 int my_ftruncate( ino_t fh, off_t offset ) {
-  return err;  
+    return an_err;  
 }  
 
 // called at line #921 of bbfs.c
 int my_fstat( ino_t fh, struct stat* statbuf ) {
 
-  //cdbg << "my_fstat has been called on " << fh << " " << long(statbuf) << endl;
-  if ( ilist.entry.count(fh) == 0 ) {
-    errno = ENOENT;
-    return err;
-  }  
-  *statbuf = ilist.entry[fh].metadata;
-  // cdbg << "and here's *statbuf for " << endl;
-  // show_stat(*statbuf);
-  return ok;
+    //cdbg << "my_fstat has been called on " << fh << " " << long(statbuf) << endl;
+    if ( ilist.entry.count(fh) == 0 ) {
+        errno = ENOENT;
+        return an_err;
+    }  
+    *statbuf = ilist.entry[fh].metadata;
+    // cdbg << "and here's *statbuf for " << endl;
+    // show_stat(*statbuf);
+    return ok;
 }  
 
 
@@ -535,132 +499,134 @@ int my_fstat( ino_t fh, struct stat* statbuf ) {
 
 
 MY_DIR* fopendir( ino_t fh ) {  // not exported
-  if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-    return 0;  // null pointer indicates err
-  }
-  MY_DIR * tmp = new MY_DIR;
-  // Initialize both members of tmp*
-  tmp->fh    = fh;
-  tmp->index = 0;
-  return tmp;
+    if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
+        return 0;  // null pointer indicates err
+    }
+    MY_DIR * tmp = new MY_DIR;
+    // Initialize both members of tmp*
+    tmp->fh    = fh;
+    tmp->index = 0;
+    return tmp;
 }
 
 
 // called at lines #707 and #726 of bbfs.c
 dirent* my_readdir( MY_DIR* dirp ) {  
-  vector<dirent_frame> v = ilist.entry[dirp->fh].dentries;
-  int tmp = dirp->index++;  // post increment dirp*'s index.
-  return tmp == v.size() ? 0 : & v[tmp].the_dirent;
+    vector<dirent_frame> v = ilist.entry[dirp->fh].dentries;
+    int tmp = dirp->index++;  // post increment dirp*'s index.
+    return tmp == v.size() ? 0 : & v[tmp].the_dirent;
 }
 
 
-// called at line #742 of bbfs.c
+// called at line #742 of bbfs.
 int my_closedir( MY_DIR* dirp ) {
-  delete dirp;  
+    delete dirp;  
 }
 
 
 ino_t lookup( string name, ino_t fh ) {
-  // Searches for and returns ino of file of a given name within the 
-  // directory given by fh.  This function will be used by find_ino().
+    // Searches for and returns ino of file of a given name within the 
+    // directory given by fh.  This function will be used by find_ino().
 
-  MY_DIR* dirp = fopendir( fh ); 
-  // fopendir() will return 0 if fh isn't the handle of a directory.
-  if ( ! dirp ) return 0;                   // And so will lookup().
-  while ( dirent* dp = my_readdir(dirp) ) {  
-    //cdbg << dp->d_name << " =? " <<name<< " then return " << dp->d_ino << endl;
-    if ( string(dp->d_name) == name ) { // comparision of C++ strings
-      my_closedir(dirp);
-      return dp->d_ino;  
-    } 
-  }
-  my_closedir(dirp);  // close MY_DIR asap, to reset internal data
-  return 0;  // name-not-found
+    MY_DIR* dirp = fopendir( fh ); 
+    // fopendir() will return 0 if fh isn't the handle of a directory.
+    if ( ! dirp ) return 0;                   // And so will lookup().
+    while ( dirent* dp = my_readdir(dirp) ) {  
+        //cdbg << dp->d_name << " =? " <<name<< " then return " << dp->d_ino << endl;
+        if ( string(dp->d_name) == name ) { // comparision of C++ strings
+            my_closedir(dirp);
+            return dp->d_ino;  
+        } 
+    }
+    my_closedir(dirp);  // close MY_DIR asap, to reset internal data
+    return 0;  // name-not-found
 }  
 
 
 ino_t find_ino( string path ) {
 
-  //cdbg << "find_ino() has been called with path \"" << path << "\"\n"; 
-  vector<string> v = split( path, "/" );  // The members of v are "segments."
-  // Here are the exact details concerning path resolution:
-  // http://manpages.ubuntu.com/manpages/lucid/en/man7/path_resolution.7.html
+    //cdbg << "find_ino() has been called with path \"" << path << "\"\n"; 
+    vector<string> v = split( path, "/" );  // The members of v are "segments."
+    // Here are the exact details concerning path resolution:
+    // http://manpages.ubuntu.com/manpages/lucid/en/man7/path_resolution.7.html
 
-  // The plan: if the initial segment is not null prepend the full
-  // pathname for the current working directory to path and start
-  // over.  Process out segments of the form"." or ".." (along with
-  // its predecessor).  Delete any other null segments.  Among other
-  // things, we want the path name "/" to designate the root
-  // directory.
+    // The plan: if the initial segment is not null prepend the full
+    // pathname for the current working directory to path and start
+    // over.  Process out segments of the form"." or ".." (along with
+    // its predecessor).  Delete any other null segments.  Among other
+    // things, we want the path name "/" to designate the root
+    // directory.
 
-  if ( v[0] != "" ) path = cwd + "/" + path;  // cwd == "" for now
-  ino_t fh = 2;    // I've read that 2 is the ino of a filesystem's 
-                   // root directory.  
-  for ( auto it : v ) {
-    if ( it == "" ) {
-       continue;                  // ignore null segments.
-    } else if ( ilist.entry.count(fh) == 0 ) {  // no such directory
-      cdbg << "no such entry as " << it << " in " << path << endl;
-      errno = ENOENT;
-      fh = 0;
-      break;
-    } else if ( S_ISDIR(ilist.entry[fh].metadata.st_mode) ) {
-      cdbg << "lookup(" << it << "," << fh << ") yields ...";
-      fh = lookup( it, fh );
-      cerr << "yields ... this value " << fh << endl;
-    } else {
-      cdbg << "In " << path <<  ", " << it << " is not a directory \n";
-      errno = ENOTDIR;
-      fh = 0;
-      break;   
-    }
-    //cdbg << v[i] << " " << fh << endl;
-  } 
-  // cdbg << "and is returning " << fh << endl;
-  return fh;
+    if ( v[0] != "" ) path = cwd + "/" + path;  // cwd == "" for now
+    ino_t fh = 2;    // I've read that 2 is the ino of a filesystem's 
+                                     // root directory.  
+    for ( auto it : v ) {
+        if ( it == "" ) {
+             continue;                  // ignore null segments.
+        } else if ( ilist.entry.count(fh) == 0 ) {  // no such directory
+            cdbg << "no such entry as " << it << " in " << path << endl;
+            errno = ENOENT;
+            fh = 0;
+            break;
+        } else if ( S_ISDIR(ilist.entry[fh].metadata.st_mode) ) {
+            //cdbg << "lookup(" << it << "," << fh << ") yields ...";
+            fh = lookup( it, fh );
+            // cerr << "yields ... this value " << fh << endl;
+        } else {
+            cdbg << "In " << path <<  ", " << it << " is not a directory \n";
+            // errno = ENOTDIR;
+            fh = 0;
+            break;   
+        }
+        //cdbg << v[i] << " " << fh << end;
+    } 
+    // cdbg << "and is returning " << fh << endl;
+    return fh;
 } 
 
 
 File* find_file( ino_t ino ) { // could improve readability of code
-  return & ilist.entry[ino];
+    return & ilist.entry[ino];
 }
 
 
 File* find_file( string s ) {  // could improve readability of code
-  return find_file(find_ino(s));
+    return find_file(find_ino(s));
 }
 
 
 // called at line #659 of bbfs.c
-MY_DIR * my_opendir( char path[PATH_MAX] ) {
-  return fopendir( find_ino( path ) ); 
-  // Note that fopendir checks whether its input is the handle of a
-  // directory.
+MY_DIR * my_opendir( const char path[PATH_MAX] ) {
+    return fopendir( find_ino( path ) ); 
+    // Note that fopendir checks whether its input is the handle of a
+    // directory.
 }
 
-int describe_file( string it, struct stat st);
+
+int describe_file( string pathname );
 
 int ls(string path) {
-  // diagnostic tool to see what's in a directory
-  ino_t fh = find_ino(path.c_str());
-  // cdbg << "ls has been called on \"" << path << "\" and ilist has " 
-  // << ilist.entry.size() << " entries\n";
-  File f = ilist.entry[fh];
-  if ( ! S_ISDIR(f.metadata.st_mode) ) {
-    errno = ENOTDIR;
-    //cdbg << "ilist entry " << fh << " isn't a directory: mode = " 
-    //     << oct << f.metadata.st_mode << endl;
-    show_stat( f.metadata);
-    return err;
-  }
-  vector<struct dirent_frame> v = f.dentries;
-  //cdbg << "The directory (ino" << fh << ") has " << v.size() << " entries:\n";
-  for ( auto it : v ) {
-    struct dirent d = it.the_dirent;
-    cout << d.d_ino << " " << d.d_name << endl;
-    //struct stat stuff;
-    //describe_file( d.d_ino, stuff );
-  }
+    // diagnostic tool to see what's in a directory
+    // cdbg << "ls has been called on \"" << path << "\" and ilist has "   
+    // << ilist.entry.size() << " entries\n";
+    ino_t fh = find_ino(path.c_str());
+    if ( fh == 0 ) return an_err;
+    File f = ilist.entry[fh];
+    if ( ! S_ISDIR(f.metadata.st_mode) ) {
+        errno = ENOTDIR;
+        cdbg << "ilist entry " << fh << " isn't a directory: mode = " 
+                 << oct << f.metadata.st_mode << endl;
+        //show_stat( f.metadata );
+        describe_file(path);
+        return ok;
+    }
+    vector<struct dirent_frame> v = f.dentries;
+    //cdbg << "The directory (ino" << fh << ") has " << v.size() << " entries:\n";
+    for ( auto it : v ) {
+        struct dirent d = it.the_dirent;
+        //cout << d.d_ino << " " << d.d_name << endl;
+        describe_file( path+"/"+d.d_name );
+    }
 }
 
 // ===========================================
@@ -668,17 +634,17 @@ int ls(string path) {
 
 template< typename T1, typename T2>   // An idea
 string pickle(map<T1,T2> m) {
-  typename map<T1,T2>::iterator it;
-  string s;
-  stringstream ss(s);
-  for ( auto it : m ) {
-    // This requires some kind of separation/terminaton symbol at the end of each.
-    ss << it.first;  
-    ss << it.second;
-  }  
+    typename map<T1,T2>::iterator it;
+    string s;
+    stringstream ss(s);
+    for ( auto it : m ) {
+        // This requires some kind of separation/terminaton symbol at the end of each.
+        ss << it.first;  
+        ss << it.second;
+    }  
 }  
 
-  
+    
 // MY_DIR is typedef'd in my_stubs.H.  It's essentially an iterator for 
 // directories.
 
@@ -875,132 +841,299 @@ string pickle(map<T1,T2> m) {
 // Connection' - the URL is intractable.)"
 // See http://superuser.com/questions/186184/the-parent-of-the-root-directory
 
-     // struct stat {
-     //     unsigned int  st_dev;      /* ID of device containing file */
-     //     unsigned int  st_ino;      /* inode number */
-     //     mode_t        st_mode;     /* type and protection of file */
-     //     unsigned int  st_nlink;    /* number of hard links */
-     //     unsigned int  st_uid;      /* user ID of owner */
-     //     unsigned int  st_gid;      /* group ID of owner */
-     //     unsigned int  st_rdev;     /* device type (if inode device) */
-     //     unsigned long st_size;     /* total size, in bytes */
-     //     unsigned long st_blksize;  /* blocksize for filesystem I/O */
-     //     unsigned long st_blocks;   /* number of 512B blocks allocated */
-     //     time_t        st_atime;    /* time of last access */
-     //     time_t        st_mtime;    /* time of last modification */
-     //     time_t        st_ctime;    /* time of last change */
-     // };
+         // struct stat {
+         //     unsigned int  st_dev;      /* ID of device containing file */
+         //     unsigned int  st_ino;      /* inode number */
+         //     mode_t        st_mode;     /* type and protection of file */
+         //     unsigned int  st_nlink;    /* number of hard links */
+         //     unsigned int  st_uid;      /* user ID of owner */
+         //     unsigned int  st_gid;      /* group ID of owner */
+         //     unsigned int  st_rdev;     /* device type (if inode device) */
+         //     unsigned long st_size;     /* total size, in bytes */
+         //     unsigned long st_blksize;  /* blocksize for filesystem I/O */
+         //     unsigned long st_blocks;   /* number of 512B blocks allocated */
+         //     time_t        st_atime;    /* time of last access */
+         //     time_t        st_mtime;    /* time of last modification */
+         //     time_t        st_ctime;    /* time of last change */
+         // };
 // Note that this shows the real types of all inode components except
 // mode_t and time_t.
 // for moredetails see: 
 //   http://manpages.ubuntu.com/manpages/hardy/man2/stat.2.html
 
 // Under development: Function to format ls lines in format of "ls -d"
-int describe_file( string it, struct stat st) {
-  //string stream ccout;
-  string filename = it;    
+int describe_file( string pathname ) {
+    //string stream ccout;
+    struct stat st;
 
-  //struct stat st;       // "struct stat" because stat() is defined
-  if ( my_lstat( filename.c_str(), &st ) != 0 ) {
-    cerr << "Cannot stat file " << filename 
-         << ": " << strerror(errno) << endl;
-    return -1;
-  }
+    //struct stat st;       // "struct stat" because stat() is defined
+    if ( my_lstat( pathname.c_str(), &st ) != 0 ) {
+        errno = ENOENT;
+        cdbg << "Cannot stat file " << pathname
+                 << ": " << strerror(errno) << endl;
+        return -1;
+    }
 
-  cout << ( (S_ISDIR(st.st_mode) != 0) ? 'd' : '-' )
-       << ( (st.st_mode & S_IRUSR) ? 'r' : '-' )
-       << ( (st.st_mode & S_IWUSR) ? 'w' : '-' )
-       << ( (st.st_mode & S_IXUSR) ? 'x' : '-' )
-       << ( (st.st_mode & S_IRGRP) ? 'r' : '-' )
-       << ( (st.st_mode & S_IWGRP) ? 'w' : '-' )
-       << ( (st.st_mode & S_IXGRP) ? 'x' : '-' )
-       << ( (st.st_mode & S_IROTH) ? 'r' : '-' )
-       << ( (st.st_mode & S_IWOTH) ? 'w' : '-' )
-       << ( (st.st_mode & S_IXOTH) ? 'x' : '-' )
-  ;
+    cout << st.st_ino << ": "
+             << ( (S_ISDIR(st.st_mode) != 0) ? 'd' : '-' )
+             << ( (st.st_mode & S_IRUSR) ? 'r' : '-' )
+             << ( (st.st_mode & S_IWUSR) ? 'w' : '-' )
+             << ( (st.st_mode & S_IXUSR) ? 'x' : '-' )
+             << ( (st.st_mode & S_IRGRP) ? 'r' : '-' )
+             << ( (st.st_mode & S_IWGRP) ? 'w' : '-' )
+             << ( (st.st_mode & S_IXGRP) ? 'x' : '-' )
+             << ( (st.st_mode & S_IROTH) ? 'r' : '-' )
+             << ( (st.st_mode & S_IWOTH) ? 'w' : '-' )
+             << ( (st.st_mode & S_IXOTH) ? 'x' : '-' )
+    ;
 
-  char date[64];
-  strftime( date, 15, "%b %d %H:%M  ", localtime( &st.st_mtime ) );
+    char date[64];
+    strftime( date, 15, "%b %d %H:%M  ", localtime( &st.st_mtime ) );
 
-  printf( 
-    "%2i %7s %7s %8ld %8s ",          // format string
-    st.st_nlink,                      // number of links
-    getpwuid(st.st_uid)->pw_name,     // password name
-    getgrgid(st.st_gid)->gr_name,     // group name
-    st.st_size,                       // size of file
-    date                              // time of last modification
-  );
-    
+    printf( 
+        "%2i %7s %7s %8ld %8s ",          // format string
+        st.st_nlink,                      // number of links
+        getpwuid(st.st_uid)->pw_name,     // password name
+        getgrgid(st.st_gid)->gr_name,     // group name
+        st.st_size,                       // size of file
+        date                              // time of last modification
+    );
+    vector<string> v = split(pathname, "/");
+    cout << v.back() << endl;  
 }
 
 
-int main() {
-  int cwd = 2;  // ino of current working directory;
-  // The place for testing of functions.
-  // cdbg << "Now we call initialize()" << endl;
-  initialize();
-  for(;;) { // Idiom for infinite loop
-    string op, file;
-    cout << "Which op and file? ";
-    cin >> op >> file;
-    if        ( op == "help" ) { // lists available ops
-		cout << "Currently implemented test commands: \n";
-		cout << "mkdir, rmdir, show, ls, lstat \n";
-    } else if (op == "play"  ) { // accepts input from file instead of keyboard
-    } else if (op == "save"  ) { // saves dialog to specified file
-    } else if (op == "mkdir" ) { // prompts for protection mode
-      cout << "Specify file permissions in octal: ";
-      mode_t mode; 
-      cin >> oct >> mode;
-      my_mkdir(file.c_str(), mode );
-    } else if (op == "rmdir"  ) { // shows file's metadata
-      my_rmdir(file.c_str() );
-    } else if (op == "show"  ) { // shows file's metadata
-      show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
-    } else if (op == "ls"  ) { // lists the specified directory. 
-      ls(file);
-    } else if (op == "lstat"  ) { // lists the specified directory. 
-      struct stat a_stat;
-      my_lstat(file.c_str(), &a_stat);
-      show_stat(a_stat);
-    } else if (op == "exit"  ) { // quits 
-      // save dialog so far to specified file.
-      return 0;
-    } else if (op == "break"  ) { // executes the rest of main()
-      break;
-    } else {
-      cout << "Correct usage is: op pathname,\n"; 
-      cout << "where \"op\" is one of the following:\n";
-      cout << "help, play, save, mkdir, rmdir, show, ls, lstat, break, exit.\n";
-      cout << "For example, type \"exit now\" to exit.\n";
+
+// man readdir(3), lstat, opendir, closedir.
+
+// Format of a directory entry: 
+// http://www.delorie.com/gnu/docs/glibc/libc_270.html
+
+// Testing the type of a file: 
+// http://www.delorie.com/gnu/docs/glibc/libc_286.html
+// (Test the st_mode field returned by stat on a given file.)
+
+// To get Linux to use ascii ordering "export LANG=us.ascii"
+
+// handy macro for iterating through an stl container
+#define each(I) \
+    for( auto it=(I).begin(); it!=(I).end(); ++it )
+
+
+int visit( string root ) { // recursive visitor function, implements lslr
+
+    // OPEN root
+    MY_DIR* dirp;                                          // open DIR
+    //if ( ! ( dirp = my_opendir( root.c_str() ) ) ) {
+    if ( ! ( dirp = my_opendir( root.c_str() ) ) ) {
+        cerr << "Cannot open directory " << root << ".\n";
+        return -1;
     }
-  }  
 
-  // Continuation of main(), which is reacable via the "break" op.
-  show_stat( ilist.entry[2].metadata );  // all looks good here.
-  cdbg << "Now we call lstat on \"/\" and &mystat" << endl;
-  struct stat mystat;
-  my_lstat("/",&mystat);
-  cdbg << "Now we call ls on \"/\"" << endl;
-  ls("/"); 
-  cdbg << "Now we call mkdir on \"/junk\" and 0700" << endl;
-  my_mkdir("/junk", 0700);
-  cdbg << "Now we call ls on \"/\"" << endl;
-  ls("/");
+    // CREATE TWO LISTS OF FILE NAMES: file and hardSubdirectory
+    list<string> file;          // names of each file in this dirctory
+    list<string> hardSubdirectory;    // each hard-linked subdirectory
+    while ( dirent* dp = my_readdir(dirp) ) {
+        string s = dp->d_name;        // converts C string to C++ string
+        if ( s == "." || s == ".." ) continue;             // skip these
+        s = root + ( root.back() == '/'? "" : "/") + s;  // prepend the current path
+        file.push_back( s ); 
+        struct stat st;
+        cdbg << "d_ino = " << dp->d_ino << endl;
+        int error = my_fstat(dp->d_ino, &st);
+        //show_stat(st);
+     
+        cdbg << "Considering " 
+                 << s << dp->d_ino << " of mode " 
+                 << oct << st.st_mode << " for hard directory.\n";
+        if ( S_ISDIR(st.st_mode) ) {
+        //if ( ( dp->d_type & DT_DIR ) && !(dp->d_type & DT_LNK) ) {
+            hardSubdirectory.push_back( s );
+        }
+    }
+    my_closedir(dirp);         // close DIR asap, to reset internal data
+    cdbg << "hardSubdirectory has " << hardSubdirectory.size() << " entries.\n";
+    for( auto it : hardSubdirectory ) cdbg << it << endl;
 
-  cdbg << "now we call ls on \"/junk\"" << endl;
-  //  cout << endl;
-  ls("/junk");
-  
-  cdbg << "Now we call mkdir on \"/junk/stuff\" and 0700" << endl;
-  my_mkdir("/junk/stuff", 700);
-  cdbg << "now we call ls on \"/junk\"" << endl;
-  ls("/junk");
-  cdbg << "now we call ls on \"/junk/stuff\"" << endl;
-  ls("/junk/stuff");
+    // EMIT root's HEADER, INCLUDING ITS TOTAL SIZE
+    cout << root << ":" << endl;
+    cout << "total ";
+    int size = 0;
+    each( file ) {
+        string filename = *it;
+        struct stat st;
+        if ( my_lstat( filename.c_str(), &st ) == 0 ) size += st.st_blocks;
+    }
+    cout << size/2 << endl;    // kilobytes-per-block correcton factor
 
-  cout << endl;
-  describe_file( "/junk", mystat);
-  cout << endl;
+    // lstat() AND REPORT ON EACH FILE WHOSE NAME IS IN root
+    file.sort();  
+    each( file ) {
+        string filename = *it;    
+
+        struct stat st;       // "struct stat" because stat() is defined
+        if ( my_lstat( filename.c_str(), &st ) != 0 ) {
+            cerr << "Cannot stat file " << filename 
+                     << ": " << strerror(errno) << endl;
+            return -1;
+        }
+
+        cout << st.st_ino << ": "     // added for CS179F
+                 << ( (S_ISDIR(st.st_mode) != 0) ? 'd' : '-' )
+                 << ( (st.st_mode & S_IRUSR) ? 'r' : '-' )
+                 << ( (st.st_mode & S_IWUSR) ? 'w' : '-' )
+                 << ( (st.st_mode & S_IXUSR) ? 'x' : '-' )
+                 << ( (st.st_mode & S_IRGRP) ? 'r' : '-' )
+                 << ( (st.st_mode & S_IWGRP) ? 'w' : '-' )
+                 << ( (st.st_mode & S_IXGRP) ? 'x' : '-' )
+                 << ( (st.st_mode & S_IROTH) ? 'r' : '-' )
+                 << ( (st.st_mode & S_IWOTH) ? 'w' : '-' )
+                 << ( (st.st_mode & S_IXOTH) ? 'x' : '-' )
+        ;
+
+        char date[64];
+        strftime( date, 15, "%b %d %H:%M  ", localtime( &st.st_mtime ) );
+
+        printf( 
+            "%2i %7s %7s %8ld %8s ",          // format string
+            st.st_nlink,                      // number of links
+            getpwuid(st.st_uid)->pw_name,     // password name
+            getgrgid(st.st_gid)->gr_name,     // group name
+            st.st_size,                       // size of file
+            date                              // time of last modification
+        );
+
+        cout << *it << endl;
+
+    }
+
+    // RECURSE THROUGH root's HARD-LINKED SUBDIRECTORIES AND RETURN
+    each( hardSubdirectory ) {
+        cout << endl;
+        visit( *it );   
+    }
+
+    return 0;                                        // return success
+
+}
+
+
+// int main( int argc, char* argv[] ) { 
+//   return visit( argc > 1 ? argv[1] : "." ); 
+// }
+
+
+
+
+int main(int argc, char* argv[] ) {
+    int cwd = 2;  // ino of current working directory;
+    // The place for testing of functions.
+    // cdbg << "Now we call initialize()" << endl;
+    initialize();
+    stringstream record;
+    ifstream myin;
+    if ( argc ) myin.open( argv[1] );
+    for(;;) { // Idiom for infinite loop
+        string op, file;
+        // if ( myin.eof() ) exit(0);
+        cout << "Which op and file? " << endl;
+        (myin.good() ? myin : cin) >> op >> file;
+        if ( op != "exit" ) record << op << " " << file << endl;
+        if        ( op == "help" ) // lists available ops
+        { 
+        }
+        else if (op == "play"  ) // accepts input from file instead of keyboard
+        { 
+        }
+        else if (op == "save"  ) // saves dialog to specified file
+        { 
+        }
+        else if (op == "mkdir" ) // prompts for protection mode
+        { 
+            cout << "Specify file permissions in octal: ";
+            mode_t mode; 
+            // cin >> oct >> mode;
+            (myin.good()? myin : cin) >> oct >> mode;
+            record << oct << mode << endl;
+            my_mkdir(file.c_str(), mode );
+        }
+        else if (op == "rmdir"  ) // shows file's metadata
+        {
+            my_rmdir(file.c_str() );
+        }
+        else if (op == "show"  ) // shows file's metadata
+        { 
+            show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
+        }
+        else if (op == "ls"  ) // lists the specified directory. 
+        { 
+            ls(file);
+        }
+        else if (op == "lstat"  ) // lists the specified directory. 
+        { 
+            struct stat a_stat;
+            my_lstat(file.c_str(), &a_stat);
+            show_stat(a_stat);
+        }
+        else if (op == "exit"  ) // quits 
+                                 // save dialog so far to specified file.
+        { 
+            ofstream myfile;
+            myfile.open (file);
+            myfile << record.str();
+            myfile.close();
+            return 0;
+        }
+        else if (op == "break"  ) // executes the rest of main()
+        { 
+            break;
+        }
+        else if (op == "lslr"  ) // executes visit()
+        { 
+            visit(file);
+        }
+        else if (op == "creat" ) //Creates a regular file
+        {
+            cout << "Specify file permissions in octal: ";
+            mode_t mode; 
+            // cin >> oct >> mode;
+            (myin.good()? myin : cin) >> oct >> mode;
+            record << oct << mode << endl;
+            my_creat(file.c_str(), mode );
+        }
+        else {
+            cout << "Correct usage is: op pathname,\n"; 
+            cout << "where \"op\" is one of the following:\n";
+            cout << "help, play, save, mkdir, show, break, lslr, exit.\n";
+            cout << "For example, type \"exit now\" to exit.\n";
+        }
+    }  
+
+    // Continuation of main(), which is reacable via the "break" op.
+    show_stat( ilist.entry[2].metadata );  // all looks good here.
+    cdbg << "Now we call lstat on \"/\" and &mystat" << endl;
+    struct stat mystat;
+    my_lstat("/",&mystat);
+    cdbg << "Now we call ls on \"/\"" << endl;
+    ls("/"); 
+    cdbg << "Now we call mkdir on \"/junk\" and 0700" << endl;
+    my_mkdir("/junk", 0700);
+    cdbg << "Now we call ls on \"/\"" << endl;
+    ls("/");
+
+    cdbg << "now we call ls on \"/junk\"" << endl;
+    //  cout << endl;
+    ls("/junk");
+    
+    cdbg << "Now we call mkdir on \"/junk/stuff\" and 0700" << endl;
+    my_mkdir("/junk/stuff", 700);
+    cdbg << "now we call ls on \"/junk\"" << endl;
+    ls("/junk");
+    cdbg << "now we call ls on \"/junk/stuff\"" << endl;
+    ls("/junk/stuff");
+
+    cout << endl;
+    describe_file( "/junk" );
+    cout << endl;
 }
 
