@@ -1,0 +1,11 @@
+ls .
+creat test1
+700
+mkdir temp
+700
+ls .
+chown test1
+100
+123
+ls .
+ 

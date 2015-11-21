@@ -362,7 +362,15 @@ int my_chmod(const char *path, mode_t mode) {
 
 // called at line #314 of bbfs.c
 int my_chown(const char *path, uid_t uid, gid_t gid) {
-    return an_err;  
+    
+    ino_t fh = find_ino(path);
+    if(fh == -1)
+        return an_err;
+
+    ilist.entry[fh].metadata.st_uid = uid;
+    ilist.entry[fh].metadata.st_gid = gid;
+
+    return ok;
 }  
 
 // called at line #331 of bbfs.c
@@ -890,14 +898,25 @@ int describe_file( string pathname ) {
     char date[64];
     strftime( date, 15, "%b %d %H:%M  ", localtime( &st.st_mtime ) );
 
+    //Sets value to be outputted
+    //Name if the id exists
+    //Or just id if the id does not exist
+    struct passwd *uid = getpwuid(st.st_uid);
+    struct group *gid = getgrgid(st.st_gid);
+    string uid_out = ( uid == NULL ? to_string(st.st_uid) : uid->pw_name );
+    string gid_out = ( gid == NULL ? to_string(st.st_gid) : gid->gr_name );
+
     printf( 
         "%2i %7s %7s %8ld %8s ",          // format string
         st.st_nlink,                      // number of links
-        getpwuid(st.st_uid)->pw_name,     // password name
-        getgrgid(st.st_gid)->gr_name,     // group name
+        uid_out.c_str(),
+        //getpwuid(st.st_uid)->pw_name,     // password name
+        gid_out.c_str(),
+        //getgrgid(st.st_gid)->gr_name,     // group name
         st.st_size,                       // size of file
         date                              // time of last modification
     );
+
     vector<string> v = split(pathname, "/");
     cout << v.back() << endl;  
 }
@@ -1100,6 +1119,21 @@ int main(int argc, char* argv[] ) {
             (myin.good()? myin : cin) >> oct >> mode;
             record << oct << mode << endl;
             my_creat(file.c_str(), mode );
+        }
+        else if (op == "chown" ) //Changes owner of file
+        {
+            uid_t u;
+            gid_t g;
+
+            cout << "Specify user id: ";
+            (myin.good() ? myin : cin) >> dec >> u;
+            record << dec << u << endl;
+
+            cout << "Specify group id: ";
+            (myin.good() ? myin : cin) >> dec >> g;
+            record << dec << g << endl;
+            
+            my_chown(file.c_str(), u, g);
         }
         else {
             cout << "Correct usage is: op pathname,\n"; 
