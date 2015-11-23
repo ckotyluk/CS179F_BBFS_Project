@@ -400,14 +400,14 @@ int my_open( const char *path, int flags ) {
     // Return its d_fileno, unless there's an error and then return -1.
 
     // FINISH THIS
-    // static filecount = 0;
-    // ino_t fh = find_ino(path);  // 
-    // if ( fh >= 0 && ) {
-    //   return fh;
-    // } else if ( flags & CREAT ) {
+    //static int filecount = 0;
+    ino_t fh = find_ino(path);  // 
+    if ( fh >= 0 ) {
+    	return fh;
+    } //else if ( flags & CREAT ) {
     //   // create a new inode with ino_t filecount++;
-    // }
-
+    //}
+	
 }  
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
@@ -417,7 +417,13 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
 
 // called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
-    return an_err;
+	string str((char*)buf);
+	
+	int j = 0;
+	for(int i = offset; i < offset + size; i++)
+		ilist.entry[fh].data[i] = str[j++];
+	
+	return str.length();
 }  
 
 // called at line #463 of bbfs.c
