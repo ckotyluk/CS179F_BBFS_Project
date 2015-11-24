@@ -424,7 +424,34 @@ int my_open( const char *path, int flags ) {
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
-    return an_err;
+	int bufLen = strlen(buf);
+	int fileLen = ilist.entry[fh].data.length();
+
+	if (bufLen < size){ //the buffer cannot hold all of the size bytes
+		if (fileLen < offset) // offset is greater than the file length
+			return an_err;
+		else if (fileLen < offset + size){ // just copy from the offset till the end of the file
+			strcpy(buf, (char*)ilist.entry[fh].data.substr(offset).c_str());
+			return fileLen - offset;
+		}
+		else{ // just copy bufLen bytes starting from the offset
+			strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, offset + bufLen).c_str());
+			return bufLen;
+		}
+	}
+
+	else{
+		if(fileLen < offset)
+			return an_err;
+		else if (fileLen < offset + size){
+			strcpy(buf, (char *)ilist.entry[fh].data.substr(offset).c_str());
+			return fileLen - offset;
+		}
+		else{ // copy everything
+			strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, offset + size).c_str());
+			return size;
+		}
+	}
 }  
 
 // called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
