@@ -407,14 +407,19 @@ int my_open( const char *path, int flags ) {
     } //else if ( flags & CREAT ) {
     //   // create a new inode with ino_t filecount++;
     //}
-	else{
+	else if (flags & O_CREAT) 
+    {
 		int err = my_creat(path, 666);
-		if(err==-1)
+		if(err == -1)
 		{
-			return err;	
+			return an_err;	
 		}
 		return find_ino(path);
 	}
+    else
+    {
+        return an_err;
+    }
 }  
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
@@ -440,7 +445,10 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
 
 // called at line #530 of bbfs.c
 int my_close( int fh ) {
-    return an_err;
+    // Since we are not concerned with error checking, we can assume that the file
+    // handle exists. And since we do not handle open files, close will not need to
+    // do anything. Thus it can always return ok.
+    return ok;
 }  
 
 // called at line #553 of bbfs.c
