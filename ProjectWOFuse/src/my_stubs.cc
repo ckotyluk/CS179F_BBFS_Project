@@ -407,7 +407,14 @@ int my_open( const char *path, int flags ) {
     } //else if ( flags & CREAT ) {
     //   // create a new inode with ino_t filecount++;
     //}
-	
+	else{
+		int err = my_creat(path, 666);
+		if(err==-1)
+		{
+			return err;	
+		}
+		return find_ino(path);
+	}
 }  
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
