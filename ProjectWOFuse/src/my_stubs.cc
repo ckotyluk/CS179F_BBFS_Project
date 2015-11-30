@@ -68,7 +68,7 @@ using namespace std;
 void show_stat( struct stat& root );
 void initialize();                  
 ino_t find_ino( string path );      
-
+ino_t lookup( string name, ino_t fh );
 
 // Here is a convenient macro for debugging.  cdbg works like cerr but 
 // prefixes the error message with its location: line number and function
@@ -343,12 +343,21 @@ int my_rmdir( const char *path ) {
 
 // called at line #241 of bbfs.c
 int my_symlink(const char *path, const char *link) {
-    return an_err;  
-}  
+	return ok;
+}
 
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
-    ino_t fh = find_ino(path);
+    //checking for collisions with the new path name
+	vector<string> vec = split(string(newpath), "/");
+	string tail = vec.back();
+	vec.pop_back();
+	string parent1 = join(vec, "/");
+	ino_t pfh = find_ino(parent1.c_str());
+	if(lookup(tail, pfh))
+		return an_err;
+
+	ino_t fh = find_ino(path);
 	vector<string> v = split(string(path), "/");
 	v.pop_back();
 	string parent = join(v, "/");
@@ -365,12 +374,7 @@ int my_rename( const char *path, const char *newpath ) {
 	strcpy(df.the_dirent.d_name, newpath);
 	df.the_dirent.d_ino = fh;
 	
-	vector<string> vec = split(string(newpath), "/");
-	vec.pop_back();
-
-	parent = join(vec, "/");
-	parent_fh = find_ino(parent.c_str());
-	ilist.entry[parent_fh].dentries.push_back(df);
+	ilist.entry[pfh].dentries.push_back(df);
 
 	return ok;
 }  
