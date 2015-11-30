@@ -329,7 +329,31 @@ int my_symlink(const char *path, const char *link) {
 
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
-    return an_err;  
+    ino_t fh = find_ino(path);
+	vector<string> v = split(string(path), "/");
+	v.pop_back();
+	string parent = join(v, "/");
+	ino_t parent_fh = find_ino(parent.c_str());
+
+	for(int i = 0; i < ilist.entry[parent_fh].dentries.size(); i++){
+		if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)path){
+			ilist.entry[parent_fh].dentries.erase(ilist.entry[parent_fh].dentries.begin()+i);
+			break;
+		}
+	}
+	dirent_frame df;
+
+	strcpy(df.the_dirent.d_name, newpath);
+	df.the_dirent.d_ino = fh;
+	
+	vector<string> vec = split(string(newpath), "/");
+	vec.pop_back();
+
+	parent = join(vec, "/");
+	parent_fh = find_ino(parent.c_str());
+	ilist.entry[parent_fh].dentries.push_back(df);
+
+	return ok;
 }  
 
 // called at line #279 of bbfs.c
