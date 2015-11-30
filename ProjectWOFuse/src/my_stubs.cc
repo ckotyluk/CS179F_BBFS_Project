@@ -39,7 +39,7 @@
 
 // Here we include
 // C stuff
-#include "my_stubs.H"
+#include "my_stubs.h"
 #include </usr/include/linux/fs.h>  // needed for compilation on vagrant
 #include <sys/stat.h>  // this has our official definition of stat
 #include <dirent.h>    // this has our official definition of dirent
@@ -104,6 +104,7 @@ public:
         static int count = 2;  // ino counter stats at 2.
         return count++;
     }
+    
 } ilist; 
 
 
@@ -115,6 +116,7 @@ void initialize() { // now called from main() but could be called from
     cwd = string(tmp);  
     // cwd now hold the path to the initial current working directory.
     // But, we don't yet use it.
+    
 }
 
 void show_stat( struct stat& root ) {
@@ -280,7 +282,24 @@ int my_mkdir( const char *path, mode_t mode ) {
 
 // called at line #203 of bbfs.cg
 int my_unlink( const char *path ) {
-    return an_err;   
+	
+	ino_t fh = find_ino(path);
+	File file_in_dir = ilist.entry[fh];
+
+	//why aren't we using S_ISREG	
+	if(! S_ISDIR(file_in_dir.metadata.st_mode))
+	{
+		cdbg <<"does not exist\n";
+		errno = ENOTDIR;
+		return an_err;
+	}
+	//vector<string> vs = split(path, "/");
+	//vs.pop_back();
+
+	ilist.entry.erase(fh);
+	
+    return ok;   
+
 }  
 
 // called at line #220 of bbfs.c
@@ -334,25 +353,26 @@ int my_rename( const char *path, const char *newpath ) {
 
 // called at line #279 of bbfs.c
 int my_link(const char *path, const char *newpath) {
-    vector<string> v = split(string(newpath),"/");
-    string tail = v.back();
-    string dirpath = join(v, "/");
-    ino_t fh = find_ino(path);
-    if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-        errno = EPERM; 
-        return an_err; 
-    }
-    ino_t fh2 = find_ino(newpath);
-    if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
-        errno = EPERM; 
-        return an_err; 
-    }
-    ++ ilist.entry[fh].metadata.st_nlink;
-    // check for overflow.
-    dirent d;
-    d.d_ino = fh;
-    strcpy( d.d_name, tail.c_str() );
-    return ok;  
+	
+	vector<string> v = split(string(newpath),"/");
+	string tail = v.back();
+	string dirpath = join(v, "/");
+	ino_t fh = find_ino(path);
+	if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
+		errno = EPERM; 
+		return an_err; 
+	}
+	ino_t fh2 = find_ino(newpath);
+	if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
+		errno = EPERM; 
+		return an_err; 
+	}
+	++ ilist.entry[fh].metadata.st_nlink;
+	// check for overflow.
+	dirent d;
+	d.d_ino = fh;
+	strcpy( d.d_name, tail.c_str() );
+	return ok;  
 }  
 
 // called at line #296 of bbfs.c
