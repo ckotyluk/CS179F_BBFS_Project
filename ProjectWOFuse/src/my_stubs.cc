@@ -381,26 +381,45 @@ int my_rename( const char *path, const char *newpath ) {
 
 // called at line #279 of bbfs.c
 int my_link(const char *path, const char *newpath) {
-	
 	vector<string> v = split(string(newpath),"/");
-	string tail = v.back();
-	string dirpath = join(v, "/");
-	ino_t fh = find_ino(path);
-	if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-		errno = EPERM; 
-		return an_err; 
+    string tail = v.back();
+    v.pop_back();
+    string dirpath = join(v, "/");
+    ino_t fh = find_ino(path);
+    if(fh == 0) // Check that path exists
+    {
+		errno = EPERM;
+		cout << "Source file " << path << " does not exist." << endl;
+		return an_err;
 	}
-	ino_t fh2 = find_ino(newpath);
-	if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
-		errno = EPERM; 
-		return an_err; 
+
+	ino_t fh3 = find_ino(dirpath);
+	if(fh3 == 0) // Check that newpath has a valid parent directory
+    {
+		errno = EPERM;
+		cout << "Destination parent directory " << path << " noes not exist." << endl;
+		return an_err;
 	}
-	++ ilist.entry[fh].metadata.st_nlink;
-	// check for overflow.
-	dirent d;
-	d.d_ino = fh;
-	strcpy( d.d_name, tail.c_str() );
-	return ok;  
+
+    ino_t fh2 = find_ino(newpath);
+	if(fh2 != 0) // Check that newpath does not exist
+    {
+		errno = EPERM;
+		cout << "Destination file " << path << " already exists." << endl;
+		return an_err;
+	}
+    
+    ++ ilist.entry[fh].metadata.st_nlink;
+    
+    dirent d;
+    d.d_ino = fh;
+    strcpy( d.d_name, tail.c_str() );
+    dirent_frame temp_df;
+    temp_df.the_dirent = d;
+    
+    ilist.entry[find_ino(dirpath)].dentries.push_back(temp_df);
+    
+    return ok; 
 }  
 
 // called at line #296 of bbfs.c
@@ -1168,7 +1187,7 @@ int visit( string root ) { // recursive visitor function, implements lslr
 
 
 int main(int argc, char* argv[] ) {
-    int cwd = 2;  // ino of current working directory;
+    //int cwd = 2;  // ino of current working directory;
     // The place for testing of functions.
     // cdbg << "Now we call initialize()" << endl;
     initialize();
@@ -1277,6 +1296,20 @@ int main(int argc, char* argv[] ) {
             int ret = my_access(file.c_str(), mode);
             cout << ( ret == 0 ? "All requested permissions granted" : "Some permissions failed" ) << endl;
         }
+		else if (op == "link")
+        {
+			cout << "Specify new path: ";
+            string newpath;
+            (myin.good()? myin : cin) >> newpath;
+            record << newpath << endl;
+            cout << "file: [" << file << "] newpath: [" << newpath << "]" << endl;
+            my_link(file.c_str(), newpath.c_str() );
+		}
+		else if(op == "cwd")
+		{
+			// Print current working directory
+			cout << "cwd = " << cwd << endl;
+		}
         else
         {
             cout << "Correct usage is: op pathname,\n"; 
