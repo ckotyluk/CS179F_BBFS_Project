@@ -1389,21 +1389,29 @@ int main(int argc, char* argv[] ) {
         }
         else if (op == "pread")
         {
-            char data[100];
-            my_pread(find_ino(file), data, 100, 0);
+            int offset, size;
+            cout << "Specify starting position: ";
+            (myin.good() ? myin : cin) >> offset;
+            cout << "Specify number of characters to read: ";
+            (myin.good() ? myin : cin) >> size;
+            char data[size];
+            my_pread(find_ino(file), data, size, offset);
             //int my_pread( int fh, char *buf, size_t size, off_t offset )
             cout << "Read [" << (string)data << "] from " << file << endl;
         }
         else if (op == "pwrite")
         {
+            int offset;
+            cout << "Specify starting position: ";
+            (myin.good() ? myin : cin) >> offset;
             cout << "Specify file data: " << endl;
             string data;
             cin.ignore();
             getline(cin,data);
-            //(myin.good() ? getline(myin,data) : getline(cin,data));// >> data;
+            
             record << data << endl;
             cout << "Writing [" << data << "] to " << file << endl;
-            my_pwrite(find_ino(file), data.c_str(), data.size(), 0);
+            my_pwrite(find_ino(file), data.c_str(), data.size(), offset);
             //my_pwrite( int fh, const char *buf, size_t size, off_t offset )
         }
         else

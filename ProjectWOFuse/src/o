@@ -1,7 +1,14 @@
 creat file
 111
-ls .
-pwrite file
-Hello, this is a test for writing...
 ls /
+pwrite file
+This is a ]Test
+ls /
+pread file
+pread file
+pwrite file
+aaaaaaaaa
+pread file
+pread file
+pread file
 pread file
