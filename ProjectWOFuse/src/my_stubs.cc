@@ -201,7 +201,6 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     // creat both directories and regular files, but the man page leaves
     // out directories.  So, I've not used it, and it's not been tested.
 
-
     dev = 100;   // a device number that's unlikely to be used on vagrant
 
     // Now we create and configure this File's metadata (inode/struct).
@@ -240,10 +239,20 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     // the root directory has no parent.
     // cdbg << "the_ino is " << the_ino << endl;
     ino_t parent_ino = find_ino(join(v,"/"));  
+    if(parent_ino == 0)
+    {
+        cout << "Error: Parent does not exist." << endl;
+        return an_err;
+    }
     static bool first_time = true;  // static vars get initialized once
     if ( first_time ) {                    
         first_time = false;
     } else {    // Omit this on first invocation, i.e., when making root
+        if(find_ino(path) != 0)
+        {
+            cout << "Error: " << path << " already exists." << endl;
+            return an_err;
+        }
         ino_t fh = find_ino(join(v,"/"));
         dirent_frame df;                    
         df.the_dirent.d_ino = the_ino; 
@@ -286,18 +295,37 @@ int my_unlink( const char *path ) {
 	ino_t fh = find_ino(path);
 	File file_in_dir = ilist.entry[fh];
 
-	//why aren't we using S_ISREG	
-	if(! S_ISDIR(file_in_dir.metadata.st_mode))
-	{
-		cdbg <<"does not exist\n";
-		errno = ENOTDIR;
-		return an_err;
-	}
-	//vector<string> vs = split(path, "/");
-	//vs.pop_back();
+    if( fh == 0)
+    {
+        cdbg <<"does not exist\n";
+        errno = ENOTDIR;
+        return an_err; 
+    }
 
-	ilist.entry.erase(fh);
-	
+    //Remove dirent
+
+    vector<string> v = split(path, "/");
+    string tail = v.back();
+    v.pop_back();
+    string parent = join(v, "/");
+    cdbg << "Parent path is: " << parent << endl;
+    ino_t parent_fh = find_ino(parent.c_str());
+
+    for(int i = 0; i < ilist.entry[parent_fh].dentries.size(); i++){
+        cdbg << ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name << " ?== " << path << endl;
+        if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)tail){
+            cout << "Deleting dentry with name: " << path << endl;
+            ilist.entry[parent_fh].dentries.erase(ilist.entry[parent_fh].dentries.begin()+i);
+            break;
+        }
+    }
+
+    ilist.entry[fh].metadata.st_nlink--;
+    if(ilist.entry[fh].metadata.st_nlink <= 0)
+    {
+	   ilist.entry.erase(fh);
+	}
+
     return ok;   
 
 }  
@@ -314,7 +342,7 @@ int my_rmdir( const char *path ) {
         errno = ENOTDIR;
         return an_err;
     }
-    if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
+    if ( the_dir.dentries.size() > 2 ) {  // for . and ..
         cdbg << "not empty\n";
         errno = ENOTEMPTY;
         return an_err;
@@ -381,7 +409,36 @@ int my_rename( const char *path, const char *newpath ) {
 
 // called at line #279 of bbfs.c
 int my_link(const char *path, const char *newpath) {
-	vector<string> v = split(string(newpath),"/");
+    ino_t fh = find_ino(path);
+    ino_t new_fh = find_ino(newpath);
+    
+    //New file already exists
+    if(new_fh != 0)
+    {
+        cout << "Error: " << newpath << " already exists." << endl;
+        return an_err;
+    }
+
+    if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
+        errno = EMLINK;  // only one link to each directory.
+        return an_err; 
+    }
+    vector<string> v = split(string(newpath),"/");
+    string tail = v.back();
+    v.pop_back();                  // get rid of tail
+    string dirpath = join(v, "/"); // the remaining (initial) part of newpath
+    ino_t fh2 = find_ino(dirpath);
+    // if dirpath didn't name a directory, find_ino() would have failed.
+    cout << "n_link was: " << ilist.entry[fh].metadata.st_nlink;
+    ilist.entry[fh].metadata.st_nlink++; // no overflow since fh is regular.
+    cout << " and is now: " << ilist.entry[fh].metadata.st_nlink << endl;
+    dirent_frame df;
+    strcpy(df.the_dirent.d_name, tail.c_str() );
+    df.the_dirent.d_ino  = fh;  
+    ilist.entry[fh2].dentries.push_back(df);
+    return ok;
+    /*
+    vector<string> v = split(string(newpath),"/");
     string tail = v.back();
     v.pop_back();
     string dirpath = join(v, "/");
@@ -420,6 +477,7 @@ int my_link(const char *path, const char *newpath) {
     ilist.entry[find_ino(dirpath)].dentries.push_back(temp_df);
     
     return ok; 
+    */
 }  
 
 // called at line #296 of bbfs.c
@@ -470,7 +528,8 @@ int my_open( const char *path, int flags ) {
     //static int filecount = 0;
     ino_t fh = find_ino(path);  // 
     if ( fh >= 0 ) {
-    	return fh;
+    	ilist.entry[fh].metadata.st_nlink++;
+        return fh;
     } //else if ( flags & CREAT ) {
     //   // create a new inode with ino_t filecount++;
     //}
@@ -539,9 +598,13 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
 
 // called at line #530 of bbfs.c
 int my_close( int fh ) {
-    // Since we are not concerned with error checking, we can assume that the file
-    // handle exists. And since we do not handle open files, close will not need to
-    // do anything. Thus it can always return ok.
+    //Since we are closing a file, we decremente the nlink count
+    ilist.entry[fh].metadata.st_nlink--;
+
+    //Whenever the nlink count is 0, we need to delete that data
+    if( ilist.entry[fh].metadata.st_nlink == 0 )
+        ilist.entry.erase(fh);
+
     return ok;
 }  
 
@@ -1305,11 +1368,44 @@ int main(int argc, char* argv[] ) {
             cout << "file: [" << file << "] newpath: [" << newpath << "]" << endl;
             my_link(file.c_str(), newpath.c_str() );
 		}
+        else if (op == "unlink")
+        {
+            cout << "Unlinking file: " << file << endl;
+            my_unlink(file.c_str() );
+        }
 		else if(op == "cwd")
 		{
 			// Print current working directory
 			cout << "cwd = " << cwd << endl;
 		}
+        else if (op == "rename")
+        {
+            cout << "Specify new file name: ";
+            string newpath;
+            (myin.good() ? myin : cin) >> newpath;
+            record << newpath << endl;
+            cout << "Renaming " << file << " to " << newpath << endl;
+            my_rename(file.c_str(), newpath.c_str());
+        }
+        else if (op == "pread")
+        {
+            char data[100];
+            my_pread(find_ino(file), data, 100, 0);
+            //int my_pread( int fh, char *buf, size_t size, off_t offset )
+            cout << "Read [" << (string)data << "] from " << file << endl;
+        }
+        else if (op == "pwrite")
+        {
+            cout << "Specify file data: " << endl;
+            string data;
+            cin.ignore();
+            getline(cin,data);
+            //(myin.good() ? getline(myin,data) : getline(cin,data));// >> data;
+            record << data << endl;
+            cout << "Writing [" << data << "] to " << file << endl;
+            my_pwrite(find_ino(file), data.c_str(), data.size(), 0);
+            //my_pwrite( int fh, const char *buf, size_t size, off_t offset )
+        }
         else
         {
             cout << "Correct usage is: op pathname,\n"; 

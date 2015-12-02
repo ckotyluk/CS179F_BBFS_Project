@@ -1,0 +1,7 @@
+creat file
+111
+ls .
+pwrite file
+Hello, this is a test for writing...
+ls /
+pread file
