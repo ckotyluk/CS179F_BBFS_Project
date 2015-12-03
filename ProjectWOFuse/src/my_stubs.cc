@@ -213,6 +213,7 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     //cdbg << "mode = " << oct << mode << " old_umask = " 
     //     << oct << old_umask << endl;
     md.st_mode    = ( mode & ~ old_umask);                /* protection */
+    cdbg << "mode: " << (oct) << md.st_mode << endl;
     md.st_nlink   = 1;                          /* number of hard links */
     md.st_uid     = geteuid();                      /* user ID of owner */
     md.st_gid     = getegid();              /* group ID of owning group */
@@ -392,14 +393,15 @@ int my_rename( const char *path, const char *newpath ) {
 	ino_t parent_fh = find_ino(parent.c_str());
 
 	for(int i = 0; i < ilist.entry[parent_fh].dentries.size(); i++){
-		if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)path){
-			ilist.entry[parent_fh].dentries.erase(ilist.entry[parent_fh].dentries.begin()+i);
-			break;
+		if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)tail){
+            ilist.entry[parent_fh].dentries.erase(ilist.entry[parent_fh].dentries.begin()+i);
+            break;
 		}
 	}
+
 	dirent_frame df;
 
-	strcpy(df.the_dirent.d_name, newpath);
+	strcpy(df.the_dirent.d_name, tail.c_str());
 	df.the_dirent.d_ino = fh;
 	
 	ilist.entry[pfh].dentries.push_back(df);
@@ -1082,8 +1084,8 @@ int describe_file( string pathname ) {
     //struct stat st;       // "struct stat" because stat() is defined
     if ( my_lstat( pathname.c_str(), &st ) != 0 ) {
         errno = ENOENT;
-        cdbg << "Cannot stat file " << pathname
-                 << ": " << strerror(errno) << endl;
+        cdbg << "Cannot stat file [" << pathname
+                 << "]: " << strerror(errno) << endl;
         return -1;
     }
 
