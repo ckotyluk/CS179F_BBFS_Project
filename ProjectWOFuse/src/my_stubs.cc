@@ -177,6 +177,7 @@ int my_lstat( const char* path, struct stat *statbuf ) {
     //cdbg << "fh = " << fh << endl;
     int retstat;
     if ( fh == 0 ) {
+        errno = EBADF; // fd is bad
         retstat = an_err;
     } else {
         retstat = my_fstat(fh,statbuf);
@@ -213,7 +214,6 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     //cdbg << "mode = " << oct << mode << " old_umask = " 
     //     << oct << old_umask << endl;
     md.st_mode    = ( mode & ~ old_umask);                /* protection */
-    cdbg << "mode: " << (oct) << md.st_mode << endl;
     md.st_nlink   = 1;                          /* number of hard links */
     md.st_uid     = geteuid();                      /* user ID of owner */
     md.st_gid     = getegid();              /* group ID of owning group */
@@ -252,6 +252,7 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
         if(find_ino(path) != 0)
         {
             cout << "Error: " << path << " already exists." << endl;
+            errno = EEXIST;
             return an_err;
         }
         ino_t fh = find_ino(join(v,"/"));
@@ -298,7 +299,7 @@ int my_unlink( const char *path ) {
 
     if( fh == 0)
     {
-        cdbg <<"does not exist\n";
+        cout << "Error: " << path << " does not exist." << endl;
         errno = ENOTDIR;
         return an_err; 
     }
@@ -383,8 +384,11 @@ int my_rename( const char *path, const char *newpath ) {
 	vec.pop_back();
 	string parent1 = join(vec, "/");
 	ino_t pfh = find_ino(parent1.c_str());
-	if(lookup(tail, pfh))
+
+	if(lookup(tail, pfh)) //File with same name exists in newpath dir
+    {
 		return an_err;
+    }
 
 	ino_t fh = find_ino(path);
 	vector<string> v = split(string(path), "/");
@@ -418,6 +422,7 @@ int my_link(const char *path, const char *newpath) {
     if(new_fh != 0)
     {
         cout << "Error: " << newpath << " already exists." << endl;
+        errno = EEXIST;
         return an_err;
     }
 

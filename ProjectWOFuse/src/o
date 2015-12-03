@@ -1,0 +1,23 @@
+mkdir a
+111
+mkdir b
+1
+ls /
+touch a/file
+111
+pwrite /a/file
+Hello there
+ls /
+touch /b/file
+111
+pwrite /b/file
+aaaaaaaaaaaaaaa
+ls /
+ls /a
+ls /b
+rename /a/file
+/b/file
+ls /
+ls /a
+ls /b
+pread /b/file
