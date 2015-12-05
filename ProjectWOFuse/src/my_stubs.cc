@@ -434,76 +434,52 @@ int my_rename( const char *path, const char *newpath ) {
 
 // called at line #279 of bbfs.c
 int my_link(const char *path, const char *newpath) {
-    ino_t fh = find_ino(path);
-    ino_t new_fh = find_ino(newpath);
-    
-    //New file already exists
-    if(new_fh != 0)
-    {
-        cout << "Error: " << newpath << " already exists." << endl;
-        errno = EEXIST;
-        return an_err;
-    }
-
-    if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-        errno = EMLINK;  // only one link to each directory.
-        return an_err; 
-    }
-    vector<string> v = split(string(newpath),"/");
-    string tail = v.back();
-    v.pop_back();                  // get rid of tail
-    string dirpath = join(v, "/"); // the remaining (initial) part of newpath
-    ino_t fh2 = find_ino(dirpath);
-    // if dirpath didn't name a directory, find_ino() would have failed.
-    cout << "n_link was: " << ilist.entry[fh].metadata.st_nlink;
-    ilist.entry[fh].metadata.st_nlink++; // no overflow since fh is regular.
-    cout << " and is now: " << ilist.entry[fh].metadata.st_nlink << endl;
-    dirent_frame df;
-    strcpy(df.the_dirent.d_name, tail.c_str() );
-    df.the_dirent.d_ino  = fh;  
-    ilist.entry[fh2].dentries.push_back(df);
-    return ok;
-    /*
-    vector<string> v = split(string(newpath),"/");
-    string tail = v.back();
-    v.pop_back();
-    string dirpath = join(v, "/");
-    ino_t fh = find_ino(path);
+	ino_t fh = find_ino(path);
     if(fh == 0) // Check that path exists
     {
 		errno = EPERM;
 		cout << "Source file " << path << " does not exist." << endl;
 		return an_err;
 	}
+	
+	if ( !S_ISREG( ilist.entry[fh].metadata.st_mode ) ) // Stop if not a file
+	{
+        errno = EMLINK;  // only one link to each directory.
+        return an_err; 
+    }
+    
+    // Split up new path to create parent path
+    vector<string> v = split(string(newpath),"/");
+    string tail = v.back();
+    v.pop_back(); // get rid of tail
+    string parent_path = join(v, "/"); // the remaining part of newpath
 
-	ino_t fh3 = find_ino(dirpath);
-	if(fh3 == 0) // Check that newpath has a valid parent directory
+	ino_t parent_fh = find_ino(parent_path);
+	if(parent_fh == 0) // Check that newpath has a valid parent directory
     {
 		errno = EPERM;
-		cout << "Destination parent directory " << path << " noes not exist." << endl;
+		cout << "Destination parent directory " << parent_path << " noes not exist." << endl;
 		return an_err;
 	}
 
-    ino_t fh2 = find_ino(newpath);
-	if(fh2 != 0) // Check that newpath does not exist
+    ino_t new_fh = find_ino(newpath);
+	if(new_fh != 0) // New file already exists
     {
-		errno = EPERM;
-		cout << "Destination file " << path << " already exists." << endl;
+		errno = EEXIST;
+		cout << "Destination file " << newpath << " already exists." << endl;
 		return an_err;
 	}
+	
+    // if dirpath didn't name a directory, find_ino() would have failed.
+    cout << "n_link was: " << ilist.entry[fh].metadata.st_nlink;
+    ++ilist.entry[fh].metadata.st_nlink; // no overflow since fh is regular.
+    cout << " and is now: " << ilist.entry[fh].metadata.st_nlink << endl;
     
-    ++ ilist.entry[fh].metadata.st_nlink;
-    
-    dirent d;
-    d.d_ino = fh;
-    strcpy( d.d_name, tail.c_str() );
-    dirent_frame temp_df;
-    temp_df.the_dirent = d;
-    
-    ilist.entry[find_ino(dirpath)].dentries.push_back(temp_df);
-    
-    return ok; 
-    */
+    dirent_frame df;
+    strcpy(df.the_dirent.d_name, tail.c_str() );
+    df.the_dirent.d_ino  = fh;  
+    ilist.entry[parent_fh].dentries.push_back(df);
+    return ok;
 }  
 
 // called at line #296 of bbfs.c
