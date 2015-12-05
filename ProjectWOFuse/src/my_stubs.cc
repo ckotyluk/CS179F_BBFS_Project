@@ -379,38 +379,57 @@ int my_symlink(const char *path, const char *link) {
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
     //checking for collisions with the new path name
-	vector<string> vec = split(string(newpath), "/");
-	string tail = vec.back();
-	vec.pop_back();
-	string parent1 = join(vec, "/");
-	ino_t pfh = find_ino(parent1.c_str());
+    vector<string> v_newpath = split(string(newpath), "/");
+    string newpath_tail = v_newpath.back();
+    v_newpath.pop_back();
+    string parent_newpath = join(v_newpath, "/");
+    ino_t parent_newpath_fh = find_ino(parent_newpath.c_str());
 
-	if(lookup(tail, pfh)) //File with same name exists in newpath dir
+    if(lookup(newpath_tail, parent_newpath_fh)) //File with same name exists in newpath dir
     {
-		return an_err;
+        cdbg << "File with same name exists in newpath dir" << endl;
+        //return an_err;
+
+        for(int i = 0; i < ilist.entry[parent_newpath_fh].dentries.size(); i++)
+        {
+            cdbg << "Checking " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)newpath_tail << endl;
+            if((string)ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name == (string)newpath_tail)
+            {
+                cdbg << "Removing newpath: " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << endl;
+                ilist.entry[parent_newpath_fh].dentries.erase(ilist.entry[parent_newpath_fh].dentries.begin()+i);
+                break;
+            } 
+        }
     }
 
-	ino_t fh = find_ino(path);
-	vector<string> v = split(string(path), "/");
-	v.pop_back();
-	string parent = join(v, "/");
-	ino_t parent_fh = find_ino(parent.c_str());
+    ino_t original_fh = find_ino(path);
+    vector<string> v_path = split(string(path), "/");
+    string path_tail = v_path.back();
+    v_path.pop_back();
+    string parent_path = join(v_path, "/");
+    ino_t parent_path_fh = find_ino(parent_path.c_str());
 
-	for(int i = 0; i < ilist.entry[parent_fh].dentries.size(); i++){
-		if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)tail){
-            ilist.entry[parent_fh].dentries.erase(ilist.entry[parent_fh].dentries.begin()+i);
+    for(int i = 0; i < ilist.entry[parent_path_fh].dentries.size(); i++)
+    {
+        cdbg << "Checking " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)path_tail << endl;
+        if((string)ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name == (string)path_tail)
+        {
+            cdbg << "Removing " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << endl;
+            ilist.entry[parent_path_fh].dentries.erase(ilist.entry[parent_path_fh].dentries.begin()+i);
             break;
-		}
-	}
+        } 
+    }
 
-	dirent_frame df;
+    dirent_frame df;
 
-	strcpy(df.the_dirent.d_name, tail.c_str());
-	df.the_dirent.d_ino = fh;
-	
-	ilist.entry[pfh].dentries.push_back(df);
+    strcpy(df.the_dirent.d_name, newpath_tail.c_str());
+    df.the_dirent.d_ino = original_fh;
 
-	return ok;
+    ilist.entry[parent_newpath_fh].dentries.push_back(df);
+
+    cdbg << "Pushing new dirent with [" << df.the_dirent.d_name << ", " << df.the_dirent.d_ino << "] onto " << parent_newpath_fh << endl;
+
+    return ok;
 }  
 
 // called at line #279 of bbfs.c
@@ -557,44 +576,45 @@ int my_open( const char *path, int flags ) {
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
-	int bufLen = strlen(buf);
+    cdbg << "File[" << fh << "] size: " << ilist.entry[fh].data.length() << endl;
+    cdbg << "File[" << fh << "] contains: [" << ilist.entry[fh].data << "]" << endl;
+    
+    //int bufLen = strlen(buf);
+    int bufLen = size;
 	int fileLen = ilist.entry[fh].data.length();
 
-	if (bufLen < size){ //the buffer cannot hold all of the size bytes
-		if (fileLen < offset) // offset is greater than the file length
-			return an_err;
-		else if (fileLen < offset + size){ // just copy from the offset till the end of the file
-			strcpy(buf, (char*)ilist.entry[fh].data.substr(offset).c_str());
-			return fileLen - offset;
-		}
-		else{ // just copy bufLen bytes starting from the offset
-			strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, offset + bufLen).c_str());
-			return bufLen;
-		}
-	}
+    cdbg << "bufLen: " << bufLen << " & fileLen: " << fileLen << endl;
+    //cdbg << "bufLen new: " << sizeof(buf) << endl;
 
-	else{
-		if(fileLen < offset)
-			return an_err;
-		else if (fileLen < offset + size){
-			strcpy(buf, (char *)ilist.entry[fh].data.substr(offset).c_str());
-			return fileLen - offset;
-		}
-		else{ // copy everything
-			strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, offset + size).c_str());
-			return size;
-		}
+	if(fileLen < offset)
+    {
+		cdbg << "Case 1" << endl;
+        return an_err;
+	}
+    else if (fileLen < (offset + size - 1) ){
+		cdbg << "Case 2" << endl;
+        strcpy(buf, (char *)ilist.entry[fh].data.substr(offset).c_str());
+		return fileLen - offset;
+	}
+	else{ // copy everything
+		cdbg << "Case 3" << endl;
+        strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, size).c_str());
+		return size;
 	}
 }  
 
 // called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
-	string str((char*)buf);
+    ilist.entry[fh].data.resize(size);
+
+    string str((char*)buf);
 	
 	int j = 0;
 	for(int i = offset; i < offset + size; i++)
-		ilist.entry[fh].data[i] = str[j++];
-	
+    {
+		ilist.entry[fh].data.at(i) = str[j++];
+    }
+
 	return str.length();
 }  
 
@@ -1400,8 +1420,13 @@ int main(int argc, char* argv[] ) {
             cout << "Specify starting position: ";
             (myin.good() ? myin : cin) >> offset;
             cout << "Specify number of characters to read: ";
-            (myin.good() ? myin : cin) >> size;
-            char data[size];
+            (myin.good() ? myin : cin) >> (dec) >> size;
+
+            cdbg << "MAIN: offset: " << (dec) << offset << (dec) << " size: " << size << endl;
+
+            char data[size+1];
+            //char* data = (char*)malloc(size+1);
+            cdbg << "buf len: " << sizeof(data) << endl;
             my_pread(find_ino(file), data, size, offset);
             //int my_pread( int fh, char *buf, size_t size, off_t offset )
             cout << "Read [" << (string)data << "] from " << file << endl;
