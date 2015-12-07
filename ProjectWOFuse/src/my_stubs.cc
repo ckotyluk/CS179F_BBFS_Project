@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <utime.h>
+#include <sys/statvfs.h>
 
 #ifdef HAVE_SYS_XATTR_H
 #include <sys/xattr.h>
@@ -67,6 +68,7 @@ using namespace std;
 // Prototypes for local functions.  There's no need to put these into
 // my_stubs.H, since these functions are local to my_stubs.cc.
 void show_stat( struct stat& root );
+void show_statvfs( struct statvfs *buf);
 void initialize();                  
 ino_t find_real_ino( string path );
 ino_t find_ino( string path );
@@ -139,6 +141,23 @@ void show_stat( struct stat& root ) {
     cerr << "st_mtime   = " << dec << root.st_mtime   << endl;  
     cerr << "st_ctime   = " << dec << root.st_ctime   << endl;  
 }; 
+
+void show_statvfs( struct statvfs *buf)
+{
+    // Displays the enteries in statvfs
+    cerr << "SHOW_STATVFS\n";
+    cerr << "f_bsize    = " << buf->f_bsize      << endl;
+    cerr << "f_frsize   = " << buf->f_frsize     << endl;
+    cerr << "f_blocks   = " << buf->f_blocks     << endl;
+    cerr << "f_bfree    = " << buf->f_bfree      << endl;
+    cerr << "f_bavail   = " << buf->f_bavail     << endl;
+    cerr << "f_files    = " << buf->f_files      << endl;
+    cerr << "f_ffree    = " << buf->f_ffree      << endl;
+    cerr << "f_favail   = " << buf->f_favail     << endl;
+    cerr << "f_fsid     = " << buf->f_fsid       << endl;
+    cerr << "f_flag     = " << buf->f_flag       << endl;
+    cerr << "f_namemax  = " << buf->f_namemax    << endl;
+}
 
 
 inline  // a simple utility for splitting strings at a find-pattern.
@@ -668,7 +687,27 @@ int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
 
 // called at line #463 of bbfs.c
 int my_statvfs(const char *fpath, struct statvfs *statv) {
-    return an_err;  
+    
+    ino_t fh = find_ino(fpath);
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
+
+    statv->f_bsize      = 0;
+    statv->f_frsize     = 0;
+    statv->f_blocks     = 0;
+    statv->f_bfree      = 0;
+    statv->f_bavail     = 0;
+    statv->f_files      = ilist.entry.size();
+    statv->f_ffree      = 0;
+    statv->f_favail     = 0;
+    statv->f_fsid       = 0;
+    statv->f_flag       = 0;
+    statv->f_namemax    = NAME_MAX;
+
+    return ok;  
 }  
 
 // called at line #530 of bbfs.c
@@ -1608,6 +1647,12 @@ int main(int argc, char* argv[] ) {
             int n;
             cin >> n;
             my_truncate(file.c_str(), n);
+        }
+        else if (op == "statvfs")
+        {
+            struct statvfs statbuf;
+            int err = my_statvfs(file.c_str(), &statbuf);
+            show_statvfs(&statbuf);
         }
         else
         {
