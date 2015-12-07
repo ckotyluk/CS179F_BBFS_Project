@@ -562,13 +562,14 @@ int my_chown(const char *path, uid_t uid, gid_t gid) {
     return ok;
 }  
 
-// called at line #331 of bbfs.c
-int my_truncate(const char *path, off_t newsize) {
-    return an_err;  
-}  
-
 // called at line #349 of bbfs.c
 int my_utime(const char *path, struct utimbuf *ubuf) {
+    if(ubuf == NULL)
+    {
+        errno = EACCES;
+        return an_err;
+    }
+
     ino_t fh = find_ino(path);
     if(fh == 0)
     {
@@ -660,6 +661,8 @@ int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
 
     //cdbg << "Wrote [" << buf << "] to file" << endl; 
 
+    ilist.entry[fh].metadata.st_size = str.length();
+
 	return str.length();
 }  
 
@@ -745,9 +748,45 @@ int my_creat( const char *fpath, mode_t mode ) {
     return my_mknod(fpath, (S_IFREG | mode), 100 );
 }  
 
+
 // called at line #887 of bbfs.c
 int my_ftruncate( ino_t fh, off_t offset ) {
-    return an_err;  
+    if(fh == 0)
+    {
+        cout << "Error: Bad fh" << endl;
+        errno = EBADF;
+        return an_err;
+    }
+    //Changes size of data, adding null if the new size is bigger
+    ilist.entry[fh].data.resize(offset,'\0');
+    ilist.entry[fh].metadata.st_size = ilist.entry[fh].data.length();
+    return ok;
+}  
+
+// called at line #331 of bbfs.c
+int my_truncate(const char *path, off_t newsize) {
+    if(newsize < 0)
+    {
+        errno = EINVAL;
+        return an_err;
+    }
+
+    ino_t fh = find_ino(path);
+    cout << "fh: " << fh << endl;
+    if(fh == 0)
+    {
+        cout << "Error: Bad fh" << endl;
+        errno = ENOENT;
+        return an_err;
+    }
+    
+    if(S_ISDIR(ilist.entry[fh].metadata.st_mode))
+    {
+        errno = EISDIR;
+        return an_err;
+    }
+
+    return my_ftruncate(fh, newsize);
 }  
 
 // called at line #921 of bbfs.c
@@ -1562,6 +1601,13 @@ int main(int argc, char* argv[] ) {
             cin >> utime.modtime;
 
             my_utime(file.c_str(),&utime);
+        }
+        else if (op == "truncate")
+        {
+            cout << "Specify new file size: ";
+            int n;
+            cin >> n;
+            my_truncate(file.c_str(), n);
         }
         else
         {
