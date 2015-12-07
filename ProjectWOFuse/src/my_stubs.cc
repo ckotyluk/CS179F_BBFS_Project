@@ -32,6 +32,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <utime.h>
 
 #ifdef HAVE_SYS_XATTR_H
 #include <sys/xattr.h>
@@ -67,7 +68,9 @@ using namespace std;
 // my_stubs.H, since these functions are local to my_stubs.cc.
 void show_stat( struct stat& root );
 void initialize();                  
-ino_t find_ino( string path );      
+ino_t find_real_ino( string path );
+ino_t find_ino( string path );
+ino_t find_sym_ino( string path );
 ino_t lookup( string name, ino_t fh );
 
 // Here is a convenient macro for debugging.  cdbg works like cerr but 
@@ -132,9 +135,9 @@ void show_stat( struct stat& root ) {
     cerr << "st_size    = "        << root.st_size    << endl;  
     cerr << "st_blksize = "        << root.st_blksize << endl;  
     cerr << "st_blocks  = "        << root.st_blocks  << endl;  
-    cerr << "st_atime   = " << hex << root.st_atime   << endl;  
-    cerr << "st_mtime   = " << hex << root.st_mtime   << endl;  
-    cerr << "st_ctime   = " << hex << root.st_ctime   << endl;  
+    cerr << "st_atime   = " << dec << root.st_atime   << endl;  
+    cerr << "st_mtime   = " << dec << root.st_mtime   << endl;  
+    cerr << "st_ctime   = " << dec << root.st_ctime   << endl;  
 }; 
 
 
@@ -173,7 +176,7 @@ const int an_err = -1;
 // lstat is called at line #95 of bbfs.c
 int my_lstat( const char* path, struct stat *statbuf ) {
     //cdbg << "lstat has been called and is calling find_ino on " << path << endl;
-    ino_t fh = find_ino(path);
+    ino_t fh = find_real_ino(path);
     //cdbg << "fh = " << fh << endl;
     int retstat;
     if ( fh == 0 ) {
@@ -187,7 +190,29 @@ int my_lstat( const char* path, struct stat *statbuf ) {
 
 // called at line #125 of bbfs.c
 int my_readlink( const char *path, char *link, size_t size ) {
-    return an_err;  
+
+    int fh = find_real_ino(path);
+    if (fh == 0)
+    {
+        cout << path << " does not exist" << endl;
+        return an_err;
+    }
+
+    if( !S_ISLNK(ilist.entry[fh].metadata.st_mode) )
+    {
+        cout << "Not a link" << endl;
+        return an_err;
+    }
+
+    //int size = ilist.entry[fh].metadata.data.size();
+
+    int err = my_pread(fh, link, size, 0);
+    if(err == -1)
+    {
+        cout << "Pread error" << endl;
+        return an_err;
+    }
+    return ok;  
 }  
 
 // called at line #168 of bbfs.c.  See line #151.
@@ -373,6 +398,38 @@ int my_rmdir( const char *path ) {
 
 // called at line #241 of bbfs.c
 int my_symlink(const char *path, const char *link) {
+    //Makes a softlink of link that points to path
+    //File at link contains path
+
+    int link_fh = find_ino(link);
+    if(link_fh != 0)
+    {
+        cout << "Error: " << link << " already exists." << endl;
+        errno = EEXIST;
+        return an_err;
+    }
+
+    // Create file
+    int err = my_creat(link, 666);
+    if(err == -1)
+    {
+        cout << "Creat Error" << endl;
+        return an_err;
+    }
+
+    //Writes the path into the link file
+    link_fh = find_ino(link);
+    my_pwrite(link_fh, path, strlen(path), 0);
+
+
+    // Setup permissions correctly and set symlink flags
+    int len = strlen(path);
+    err = my_chmod(link, ilist.entry[link_fh].metadata.st_mode | S_IFLNK);
+    if(err == -1)
+    {
+        cout << "Chmod Error" << endl;
+        return an_err;
+    }
 	return ok;
 }
 
@@ -512,7 +569,17 @@ int my_truncate(const char *path, off_t newsize) {
 
 // called at line #349 of bbfs.c
 int my_utime(const char *path, struct utimbuf *ubuf) {
-    return an_err;  
+    ino_t fh = find_ino(path);
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
+
+    ilist.entry[fh].metadata.st_atime = (ubuf ? (*ubuf).actime : time(0) );
+    ilist.entry[fh].metadata.st_mtime = (ubuf ? (*ubuf).modtime : time(0) );
+
+    return ok;  
 }  
 
 // called at line #376 of bbfs.c.  Returns file handle not a file descriptor
@@ -552,28 +619,28 @@ int my_open( const char *path, int flags ) {
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
-    cdbg << "File[" << fh << "] size: " << ilist.entry[fh].data.length() << endl;
-    cdbg << "File[" << fh << "] contains: [" << ilist.entry[fh].data << "]" << endl;
+    //cdbg << "File[" << fh << "] size: " << ilist.entry[fh].data.length() << endl;
+    //cdbg << "File[" << fh << "] contains: [" << ilist.entry[fh].data << "]" << endl;
     
     //int bufLen = strlen(buf);
     int bufLen = size;
 	int fileLen = ilist.entry[fh].data.length();
 
-    cdbg << "bufLen: " << bufLen << " & fileLen: " << fileLen << endl;
+    //cdbg << "bufLen: " << bufLen << " & fileLen: " << fileLen << endl;
     //cdbg << "bufLen new: " << sizeof(buf) << endl;
 
 	if(fileLen < offset)
     {
-		cdbg << "Case 1" << endl;
+        //cdbg << "Case 1" << endl;
         return an_err;
 	}
     else if (fileLen < (offset + size - 1) ){
-		cdbg << "Case 2" << endl;
+		//cdbg << "Case 2" << endl;
         strcpy(buf, (char *)ilist.entry[fh].data.substr(offset).c_str());
 		return fileLen - offset;
 	}
 	else{ // copy everything
-		cdbg << "Case 3" << endl;
+		//cdbg << "Case 3" << endl;
         strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, size).c_str());
 		return size;
 	}
@@ -590,6 +657,8 @@ int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
     {
 		ilist.entry[fh].data.at(i) = str[j++];
     }
+
+    //cdbg << "Wrote [" << buf << "] to file" << endl; 
 
 	return str.length();
 }  
@@ -758,8 +827,7 @@ ino_t lookup( string name, ino_t fh ) {
     return 0;  // name-not-found
 }  
 
-
-ino_t find_ino( string path ) {
+ino_t find_real_ino( string path ) {
 
     //cdbg << "find_ino() has been called with path \"" << path << "\"\n"; 
     vector<string> v = split( path, "/" );  // The members of v are "segments."
@@ -801,6 +869,41 @@ ino_t find_ino( string path ) {
 } 
 
 
+ino_t find_ino( string path ) {
+    int fh = find_real_ino(path);
+    if(S_ISLNK(ilist.entry[fh].metadata.st_mode) )
+    {
+        char link[50];
+        int err = my_readlink(path.c_str(), link, 50);
+        if(err == -1)
+        {
+            cout << "Error: Readlink fails" << endl;
+            return an_err;
+        }
+
+        fh = find_real_ino(link);
+    }
+    return fh;
+} 
+/*
+ino_t find_ino( string path )
+{
+    int fh = get_ino(path);
+    if(S_ISLNK(ilist.entry[fh].metadata.st_mode) )
+    {
+        char link[50];
+        int err = my_readlink(path.c_str(), link, 50);
+        if(err == -1)
+        {
+            cout << "Error: Readlink fails" << endl;
+            return an_err;
+        }
+
+        fh = get_ino(link);
+    }
+    return fh;
+}*/
+
 File* find_file( ino_t ino ) { // could improve readability of code
     return & ilist.entry[ino];
 }
@@ -825,7 +928,7 @@ int ls(string path) {
     // diagnostic tool to see what's in a directory
     // cdbg << "ls has been called on \"" << path << "\" and ilist has "   
     // << ilist.entry.size() << " entries\n";
-    ino_t fh = find_ino(path.c_str());
+    ino_t fh = find_real_ino(path.c_str());
     if ( fh == 0 ) return an_err;
     File f = ilist.entry[fh];
     if ( ! S_ISDIR(f.metadata.st_mode) ) {
@@ -1091,7 +1194,7 @@ int describe_file( string pathname ) {
     }
 
     cout << st.st_ino << ": "
-             << ( (S_ISDIR(st.st_mode) != 0) ? 'd' : '-' )
+             << ( (S_ISDIR(st.st_mode) != 0) ? 'd' : (  (S_ISLNK(st.st_mode) != 0) ? 'l' : '-' ) )
              << ( (st.st_mode & S_IRUSR) ? 'r' : '-' )
              << ( (st.st_mode & S_IWUSR) ? 'w' : '-' )
              << ( (st.st_mode & S_IXUSR) ? 'x' : '-' )
@@ -1126,7 +1229,14 @@ int describe_file( string pathname ) {
     );
 
     vector<string> v = split(pathname, "/");
-    cout << v.back() << endl;  
+    if(S_ISLNK(st.st_mode) )
+    {
+        cout << v.back() << " -> " << ilist.entry[find_real_ino(pathname)].data << endl;
+    }
+    else
+    {
+        cout << v.back() << endl;  
+    }
 }
 
 
@@ -1398,11 +1508,11 @@ int main(int argc, char* argv[] ) {
             cout << "Specify number of characters to read: ";
             (myin.good() ? myin : cin) >> (dec) >> size;
 
-            cdbg << "MAIN: offset: " << (dec) << offset << (dec) << " size: " << size << endl;
+            //cdbg << "MAIN: offset: " << (dec) << offset << (dec) << " size: " << size << endl;
 
             char data[size+1];
             //char* data = (char*)malloc(size+1);
-            cdbg << "buf len: " << sizeof(data) << endl;
+            //cdbg << "buf len: " << sizeof(data) << endl;
             my_pread(find_ino(file), data, size, offset);
             //int my_pread( int fh, char *buf, size_t size, off_t offset )
             cout << "Read [" << (string)data << "] from " << file << endl;
@@ -1421,6 +1531,37 @@ int main(int argc, char* argv[] ) {
             cout << "Writing [" << data << "] to " << file << endl;
             my_pwrite(find_ino(file), data.c_str(), data.size(), offset);
             //my_pwrite( int fh, const char *buf, size_t size, off_t offset )
+        }
+        else if (op == "symlink")
+        {
+            string link;
+
+            //cout << "Specifiy path: ";
+            //(myin.good() ? myin : cin) >> path;
+            cout << "Specifiy link: ";
+            (myin.good() ? myin : cin) >> link;
+
+            my_symlink(file.c_str(),link.c_str());
+        }
+        else if (op == "readlink")
+        {
+            char link[20];
+            int err = my_readlink(file.c_str(),link,20);
+            if(err != -1)
+            {
+                cout << file << "->" << link << endl;
+            }
+        }
+        else if (op == "utime")
+        {
+            struct utimbuf utime;
+            int atime, mtime;
+            cout << "Specify new access time in decimal seconds: " << endl;
+            cin >> utime.actime;
+            cout << "Specifiy new mod time in decimal seconds: " << endl;
+            cin >> utime.modtime;
+
+            my_utime(file.c_str(),&utime);
         }
         else
         {
