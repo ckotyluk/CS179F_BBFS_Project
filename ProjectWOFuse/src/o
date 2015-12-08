@@ -1,8 +1,0 @@
-touch filea
-777
-ls /
-lsetxattr filea
-ls /
-ls .
-ls .
-ls /
