@@ -67,6 +67,7 @@
 #include <list>
 #include <iostream>  
 #include <errno.h>
+#include <iomanip>
 
 using namespace std;
 
@@ -1794,7 +1795,36 @@ int main(int argc, char* argv[] ) {
         {
             cout << "Correct usage is: op pathname,\n"; 
             cout << "where \"op\" is one of the following:\n";
-            cout << "help, play, save, mkdir, show, break, lslr, exit.\n";
+            cout << setw(10) << left << "help" <<
+                    setw(10) << "play" <<
+                    setw(10) <<  "save" <<
+                    setw(10) <<  "mkdir" <<
+                    setw(10) << "rmdir" << endl <<
+                    setw(10) << "show " <<
+                    setw(10) << "ls " << 
+                    setw(10) << "lstat " << 
+                    setw(10) << "break" << 
+                    setw(10) << " lslr" << endl <<
+                    setw(10) << "exit" <<
+                    setw(10) << "creat" <<
+                    setw(10) << "touch" <<
+                    setw(10) << "chown" <<
+                    setw(10) << "chmod" << endl <<
+                    setw(10) << "access" <<
+                    setw(10) << "link" <<
+                    setw(10) << "unlink" <<
+                    setw(10) << "cwd" <<
+                    setw(10) << "rename" << endl <<
+                    setw(10) << "pread" <<
+                    setw(10) << "pwrite" <<
+                    setw(10) << "symlink" <<
+                    setw(10) << "readlink" <<
+                    setw(10) << "utime" << endl <<
+                    setw(10) << "truncate" <<
+                    setw(10) << "statvfs" <<
+                    setw(10) << "lsetxattr" <<
+                    setw(10) << "lgetxattr" <<
+                    setw(10) << "lremovexattr " << setw(10) << "llistxattr" << endl;
             cout << "For example, type \"exit now\" to exit.\n";
         }
     }  
