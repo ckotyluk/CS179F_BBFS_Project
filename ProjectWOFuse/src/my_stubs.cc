@@ -360,13 +360,13 @@ int my_unlink( const char *path ) {
 
     v.pop_back();
     string parent = join(v, "/");
-    cdbg << "Parent path is: " << parent << endl;
+    //cdbg << "Parent path is: " << parent << endl;
     ino_t parent_fh = find_ino(parent.c_str());
 
     for(int i = 0; i < ilist.entry[parent_fh].dentries.size(); i++){
         cdbg << ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name << " ?== " << path << endl;
         if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)tail){
-            cout << "Deleting dentry with name: " << path << endl;
+            //cout << "Deleting dentry with name: " << path << endl;
             ilist.entry[parent_fh].dentries.erase(ilist.entry[parent_fh].dentries.begin()+i);
             break;
         }
@@ -688,23 +688,44 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
 }  
 
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
+    //cout << "File size: " << ilist.entry[fh].data.size() << endl;
+    //cout << "New size: " << size << endl;
+
+    int new_size = ilist.entry[fh].data.size() + size;
+
+    if(fh == 0)
+    {
+        cout << "Error: File does not exist." << endl;
+        errno = ENOENT;
+        return an_err;
+    }
     if(!S_ISREG( ilist.entry[fh].metadata.st_mode))
     {
         cout << "Error: Trying to write to a non-regular file." << endl;
         return an_err;
     }
 
-    ilist.entry[fh].data.resize(size);
+    if(offset > ilist.entry[fh].data.size())
+    {
+        //cout << "Offset past end of file" << endl;
+        offset = ilist.entry[fh].data.size();
+        //cout << "Offset is now: " << offset << endl;
+    }
+
+    ilist.entry[fh].data.resize(new_size);
+    //cout << "File size after resize(): " << ilist.entry[fh].data.size() << endl;
+
 
     string str((char*)buf);
 	
 	int j = 0;
 	for(int i = offset; i < offset + size; i++)
     {
-		ilist.entry[fh].data.at(i) = str[j++];
+		//cout << "Writing to " << i << endl;
+        ilist.entry[fh].data.at(i) = str[j++];
     }
 
-    //cdbg << "Wrote [" << buf << "] to file" << endl; 
+    cdbg << "Wrote [" << buf << "] to file" << endl; 
 
     ilist.entry[fh].metadata.st_size = str.length();
 
@@ -1452,21 +1473,21 @@ int visit( string root ) { // recursive visitor function, implements lslr
         s = root + ( root.back() == '/'? "" : "/") + s;  // prepend the current path
         file.push_back( s ); 
         struct stat st;
-        cdbg << "d_ino = " << dp->d_ino << endl;
+        //cdbg << "d_ino = " << dp->d_ino << endl;
         int error = my_fstat(dp->d_ino, &st);
         //show_stat(st);
      
-        cdbg << "Considering " 
-                 << s << dp->d_ino << " of mode " 
-                 << oct << st.st_mode << " for hard directory.\n";
+        //cdbg << "Considering " 
+        //        << s << dp->d_ino << " of mode " 
+        //         << oct << st.st_mode << " for hard directory.\n";
         if ( S_ISDIR(st.st_mode) ) {
         //if ( ( dp->d_type & DT_DIR ) && !(dp->d_type & DT_LNK) ) {
             hardSubdirectory.push_back( s );
         }
     }
     my_closedir(dirp);         // close DIR asap, to reset internal data
-    cdbg << "hardSubdirectory has " << hardSubdirectory.size() << " entries.\n";
-    for( auto it : hardSubdirectory ) cdbg << it << endl;
+    //cdbg << "hardSubdirectory has " << hardSubdirectory.size() << " entries.\n";
+    //for( auto it : hardSubdirectory ) cdbg << it << endl;
 
     // EMIT root's HEADER, INCLUDING ITS TOTAL SIZE
     cout << root << ":" << endl;
@@ -1705,7 +1726,11 @@ int main(int argc, char* argv[] ) {
             
             record << data << endl;
             cout << "Writing [" << data << "] to " << file << endl;
-            my_pwrite(find_ino(file), data.c_str(), data.size(), offset);
+
+            int fh = find_ino(file);
+            //int size = ilist.entry[fh].data.size();
+
+            my_pwrite(fh, data.c_str(), data.size(), offset);
             //my_pwrite( int fh, const char *buf, size_t size, off_t offset )
         }
         else if (op == "symlink")
@@ -1824,7 +1849,8 @@ int main(int argc, char* argv[] ) {
                     setw(10) << "statvfs" <<
                     setw(10) << "lsetxattr" <<
                     setw(10) << "lgetxattr" <<
-                    setw(10) << "lremovexattr " << setw(10) << "llistxattr" << endl;
+                    setw(10) << "lremovexattr " << endl << 
+                    setw(10) << "llistxattr" << endl;
             cout << "For example, type \"exit now\" to exit.\n";
         }
     }  
