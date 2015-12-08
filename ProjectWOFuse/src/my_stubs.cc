@@ -344,7 +344,7 @@ int my_mkdir( const char *path, mode_t mode ) {
 // called at line #203 of bbfs.cg
 int my_unlink( const char *path ) {
 	
-	ino_t fh = find_ino(path);
+    ino_t fh = find_ino(path);
 	File file_in_dir = ilist.entry[fh];
 
     if( fh == 0)
@@ -358,6 +358,12 @@ int my_unlink( const char *path ) {
 
     vector<string> v = split(path, "/");
     string tail = v.back();
+    if(tail == "." || tail == "..")
+    {
+        cout << "Error: Trying to unlink . or .." << endl;
+        return an_err;
+    }
+
     v.pop_back();
     string parent = join(v, "/");
     cdbg << "Parent path is: " << parent << endl;
@@ -460,6 +466,20 @@ int my_symlink(const char *path, const char *link) {
 
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
+    
+    ino_t original_fh = find_ino(path);
+    vector<string> v_path = split(string(path), "/");
+    string path_tail = v_path.back();
+    v_path.pop_back();
+    string parent_path = join(v_path, "/");
+    ino_t parent_path_fh = find_ino(parent_path.c_str());
+
+    if(path_tail == "." || path_tail == "..")
+    {
+        cout << "Error: Trying to rename . or .." << endl;
+        return an_err;
+    }
+
     //checking for collisions with the new path name
     vector<string> v_newpath = split(string(newpath), "/");
     string newpath_tail = v_newpath.back();
@@ -469,34 +489,27 @@ int my_rename( const char *path, const char *newpath ) {
 
     if(lookup(newpath_tail, parent_newpath_fh)) //File with same name exists in newpath dir
     {
-        cdbg << "File with same name exists in newpath dir" << endl;
+        //cdbg << "File with same name exists in newpath dir" << endl;
         //return an_err;
 
         for(int i = 0; i < ilist.entry[parent_newpath_fh].dentries.size(); i++)
         {
-            cdbg << "Checking " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)newpath_tail << endl;
+            //cdbg << "Checking " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)newpath_tail << endl;
             if((string)ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name == (string)newpath_tail)
             {
-                cdbg << "Removing newpath: " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << endl;
+                //cdbg << "Removing newpath: " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << endl;
                 ilist.entry[parent_newpath_fh].dentries.erase(ilist.entry[parent_newpath_fh].dentries.begin()+i);
                 break;
             } 
         }
     }
 
-    ino_t original_fh = find_ino(path);
-    vector<string> v_path = split(string(path), "/");
-    string path_tail = v_path.back();
-    v_path.pop_back();
-    string parent_path = join(v_path, "/");
-    ino_t parent_path_fh = find_ino(parent_path.c_str());
-
     for(int i = 0; i < ilist.entry[parent_path_fh].dentries.size(); i++)
     {
-        cdbg << "Checking " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)path_tail << endl;
+        //cdbg << "Checking " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)path_tail << endl;
         if((string)ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name == (string)path_tail)
         {
-            cdbg << "Removing " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << endl;
+            //cdbg << "Removing " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << endl;
             ilist.entry[parent_path_fh].dentries.erase(ilist.entry[parent_path_fh].dentries.begin()+i);
             break;
         } 
@@ -509,7 +522,7 @@ int my_rename( const char *path, const char *newpath ) {
 
     ilist.entry[parent_newpath_fh].dentries.push_back(df);
 
-    cdbg << "Pushing new dirent with [" << df.the_dirent.d_name << ", " << df.the_dirent.d_ino << "] onto " << parent_newpath_fh << endl;
+    //cdbg << "Pushing new dirent with [" << df.the_dirent.d_name << ", " << df.the_dirent.d_ino << "] onto " << parent_newpath_fh << endl;
 
     return ok;
 }  
@@ -567,8 +580,17 @@ int my_link(const char *path, const char *newpath) {
 // called at line #296 of bbfs.c
 int my_chmod(const char *path, mode_t mode) {
     ino_t fh = find_ino(path);
-    if(fh == -1)
+
+    if(S_ISDIR( ilist.entry[fh].metadata.st_mode))
+    {
+        mode = (mode | S_IFDIR);
+    }
+
+    if(fh == 0)
+    {
+        cout << "Error: Bad fh" << endl;
         return an_err;  
+    }
 
     ilist.entry[fh].metadata.st_mode = mode;
     return ok;
@@ -645,6 +667,13 @@ int my_open( const char *path, int flags ) {
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
+    
+    if(S_ISDIR( ilist.entry[fh].metadata.st_mode))
+    {
+        cout << "Error: Trying to read from a non-regular file." << endl;
+        return an_err;
+    }
+
     //cdbg << "File[" << fh << "] size: " << ilist.entry[fh].data.length() << endl;
     //cdbg << "File[" << fh << "] contains: [" << ilist.entry[fh].data << "]" << endl;
     
@@ -674,6 +703,12 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
 
 // called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
+    if(!S_ISREG( ilist.entry[fh].metadata.st_mode))
+    {
+        cout << "Error: Trying to write to a non-regular file." << endl;
+        return an_err;
+    }
+
     ilist.entry[fh].data.resize(size);
 
     string str((char*)buf);
@@ -873,7 +908,15 @@ int my_access( const char *fpath, int mask ) {
 // called at line #856 of bbfs.c
 int my_creat( const char *fpath, mode_t mode ) {
     // we can create a file by using the right flags to open
-    
+
+    vector<string> v = split( fpath, "/" );
+    string tail = v.back();
+    if(tail == "." || tail == "..")
+    {
+        cout << "Error: Trying to create . or .. as a regular file" << endl;
+        return an_err;
+    }
+
     return my_mknod(fpath, (S_IFREG | mode), 100 );
 }  
 
