@@ -198,7 +198,6 @@ const int an_err = -1;
 // Note that for pointer and ino_t return values, 0 indicates an error.
 
 
-// lstat is called at line #95 of bbfs.c
 int my_lstat( const char* path, struct stat *statbuf ) {
     //cdbg << "lstat has been called and is calling find_ino on " << path << endl;
     ino_t fh = find_real_ino(path);
@@ -213,7 +212,6 @@ int my_lstat( const char* path, struct stat *statbuf ) {
     return retstat;
 }  
 
-// called at line #125 of bbfs.c
 int my_readlink( const char *path, char *link, size_t size ) {
 
     int fh = find_real_ino(path);
@@ -229,8 +227,6 @@ int my_readlink( const char *path, char *link, size_t size ) {
         return an_err;
     }
 
-    //int size = ilist.entry[fh].metadata.data.size();
-
     int err = my_pread(fh, link, size, 0);
     if(err == -1)
     {
@@ -240,7 +236,6 @@ int my_readlink( const char *path, char *link, size_t size ) {
     return ok;  
 }  
 
-// called at line #168 of bbfs.c.  See line #151.
 int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     //cdbg <<"mknod been called with " << path << " " << oct << mode 
     //       << " " << dev <<endl;
@@ -333,7 +328,6 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
 }  
 
 
-// called at line #186 of bbfs.c
 int my_mkdir( const char *path, mode_t mode ) {
     // returns an error code.
     //cdbg << "mkdir has been called with path \"" << path<< "\" and mode " \
@@ -341,7 +335,6 @@ int my_mkdir( const char *path, mode_t mode ) {
     return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
-// called at line #203 of bbfs.cg
 int my_unlink( const char *path ) {
 	
     ino_t fh = find_ino(path);
@@ -388,7 +381,6 @@ int my_unlink( const char *path ) {
 
 }  
 
-// called at line #220 of bbfs.c
 int my_rmdir( const char *path ) {
     // See http://linux.die.net/man/2/rmdir for a full list of all 13
     // possible errors for rmdir.
@@ -427,10 +419,18 @@ int my_rmdir( const char *path ) {
     return ok;
 }  
 
-// called at line #241 of bbfs.c
 int my_symlink(const char *path, const char *link) {
     //Makes a softlink of link that points to path
     //File at link contains path
+
+    vector<string> v_link = split(string(link), "/");
+    string link_tail = v_link.back();
+
+    if(link_tail == "." || link_tail == "..")
+    {
+        cout << "Error: Symlink trying to overwrite . or .." << endl;
+        return an_err;
+    }
 
     int link_fh = find_ino(link);
     if(link_fh != 0)
@@ -464,7 +464,6 @@ int my_symlink(const char *path, const char *link) {
 	return ok;
 }
 
-// called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
     
     ino_t original_fh = find_ino(path);
@@ -527,7 +526,6 @@ int my_rename( const char *path, const char *newpath ) {
     return ok;
 }  
 
-// called at line #279 of bbfs.c
 int my_link(const char *path, const char *newpath) {
 	ino_t fh = find_ino(path);
     if(fh == 0) // Check that path exists
@@ -577,7 +575,6 @@ int my_link(const char *path, const char *newpath) {
     return ok;
 }  
 
-// called at line #296 of bbfs.c
 int my_chmod(const char *path, mode_t mode) {
     ino_t fh = find_ino(path);
 
@@ -596,7 +593,6 @@ int my_chmod(const char *path, mode_t mode) {
     return ok;
 }  
 
-// called at line #314 of bbfs.c
 int my_chown(const char *path, uid_t uid, gid_t gid) {
     
     ino_t fh = find_ino(path);
@@ -609,7 +605,6 @@ int my_chown(const char *path, uid_t uid, gid_t gid) {
     return ok;
 }  
 
-// called at line #349 of bbfs.c
 int my_utime(const char *path, struct utimbuf *ubuf) {
     if(ubuf == NULL)
     {
@@ -630,7 +625,7 @@ int my_utime(const char *path, struct utimbuf *ubuf) {
     return ok;  
 }  
 
-// called at line #376 of bbfs.c.  Returns file handle not a file descriptor
+// Returns file handle not a file descriptor
 int my_open( const char *path, int flags ) {
     // Write a function called "lookup" that takes a full path and the
     // handle of a directory and returns the handle of the inode having
@@ -647,9 +642,7 @@ int my_open( const char *path, int flags ) {
     if ( fh >= 0 ) {
     	ilist.entry[fh].metadata.st_nlink++;
         return fh;
-    } //else if ( flags & CREAT ) {
-    //   // create a new inode with ino_t filecount++;
-    //}
+    } 
 	else if (flags & O_CREAT) 
     {
 		int err = my_creat(path, 666);
@@ -665,7 +658,6 @@ int my_open( const char *path, int flags ) {
     }
 }  
 
-// called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
     
     if(S_ISDIR( ilist.entry[fh].metadata.st_mode))
@@ -677,31 +669,23 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
     //cdbg << "File[" << fh << "] size: " << ilist.entry[fh].data.length() << endl;
     //cdbg << "File[" << fh << "] contains: [" << ilist.entry[fh].data << "]" << endl;
     
-    //int bufLen = strlen(buf);
     int bufLen = size;
 	int fileLen = ilist.entry[fh].data.length();
 
-    //cdbg << "bufLen: " << bufLen << " & fileLen: " << fileLen << endl;
-    //cdbg << "bufLen new: " << sizeof(buf) << endl;
-
 	if(fileLen < offset)
     {
-        //cdbg << "Case 1" << endl;
         return an_err;
 	}
     else if (fileLen < (offset + size - 1) ){
-		//cdbg << "Case 2" << endl;
         strcpy(buf, (char *)ilist.entry[fh].data.substr(offset).c_str());
 		return fileLen - offset;
 	}
 	else{ // copy everything
-		//cdbg << "Case 3" << endl;
         strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, size).c_str());
 		return size;
 	}
 }  
 
-// called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
     if(!S_ISREG( ilist.entry[fh].metadata.st_mode))
     {
@@ -726,7 +710,6 @@ int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
 	return str.length();
 }  
 
-// called at line #463 of bbfs.c
 int my_statvfs(const char *fpath, struct statvfs *statv) {
     
     ino_t fh = find_ino(fpath);
@@ -751,7 +734,6 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
     return ok;  
 }  
 
-// called at line #530 of bbfs.c
 int my_close( int fh ) {
     //Since we are closing a file, we decremente the nlink count
     ilist.entry[fh].metadata.st_nlink--;
@@ -763,21 +745,23 @@ int my_close( int fh ) {
     return ok;
 }  
 
-// called at line #553 of bbfs.c
 int my_fdatasync( ino_t fh ) {
     return an_err;  
 }  
 
-// called at line #556 of bbfs.c
 int my_fsync( ino_t fh ) {
     return an_err;  
 }  
 
-// called at line #575 of bbfs.c
 //Stores (name:value) into fpath
 int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t size, int flags )
 {
     ino_t fh = find_real_ino(fpath);
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
 
     string x_name = (string)name;
     string x_val = (string)value;
@@ -794,10 +778,14 @@ int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t
     return ok;  
 }  
 
-// called at line #592 of bbfs.c
 int my_lgetxattr( const char *fpath, const char *name, char *value, size_t size, int flags )
 {
     ino_t fh = find_real_ino(fpath);
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
 
     std::map<string,string>::iterator it;
 
@@ -823,7 +811,6 @@ void print_xattr_list(char* buf, int size)
     }
 }
 
-// called at line #613 of bbfs.c
 int my_llistxattr( const char *path, char *list, size_t size ) {
     ino_t fh = find_real_ino(path);
     if(fh == 0)
@@ -842,7 +829,6 @@ int my_llistxattr( const char *path, char *list, size_t size ) {
         tmpsize = strlen((it->first).c_str());
         if((curPos + tmpsize + 1) < (size))
         {
-            //list[curPos] = (it->first).c_str();
             for(int i = 0; i < tmpsize; i++)
             {
                 list[curPos+i] = (it->first).at(i);
@@ -857,7 +843,6 @@ int my_llistxattr( const char *path, char *list, size_t size ) {
     return curPos;
 }  
 
-// called at line #634 of bbfs.c
 int my_lremovexattr( const char *path, const char *name ) {
     ino_t fh = find_ino(path);
     if(fh == 0)
@@ -878,7 +863,6 @@ int my_lremovexattr( const char *path, const char *name ) {
 }  
 
 
-// called at line #826 of bbfs.c
 //Checks file perms with your perms
 //If all perms match, return 0
 //If not, returns -1
@@ -905,7 +889,6 @@ int my_access( const char *fpath, int mask ) {
     return ok;  
 }  
 
-// called at line #856 of bbfs.c
 int my_creat( const char *fpath, mode_t mode ) {
     // we can create a file by using the right flags to open
 
@@ -921,7 +904,6 @@ int my_creat( const char *fpath, mode_t mode ) {
 }  
 
 
-// called at line #887 of bbfs.c
 int my_ftruncate( ino_t fh, off_t offset ) {
     if(fh == 0)
     {
@@ -935,7 +917,6 @@ int my_ftruncate( ino_t fh, off_t offset ) {
     return ok;
 }  
 
-// called at line #331 of bbfs.c
 int my_truncate(const char *path, off_t newsize) {
     if(newsize < 0)
     {
@@ -961,7 +942,6 @@ int my_truncate(const char *path, off_t newsize) {
     return my_ftruncate(fh, newsize);
 }  
 
-// called at line #921 of bbfs.c
 int my_fstat( ino_t fh, struct stat* statbuf ) {
 
     //cdbg << "my_fstat has been called on " << fh << " " << long(statbuf) << endl;
@@ -1006,19 +986,15 @@ MY_DIR* fopendir( ino_t fh ) {  // not exported
 }
 
 
-// called at lines #707 and #726 of bbfs.c
 dirent* my_readdir( MY_DIR* dirp ) {  
     vector<dirent_frame> v = ilist.entry[dirp->fh].dentries;
     int tmp = dirp->index++;  // post increment dirp*'s index.
     return tmp == v.size() ? 0 : & v[tmp].the_dirent;
 }
 
-
-// called at line #742 of bbfs.
 int my_closedir( MY_DIR* dirp ) {
     delete dirp;  
 }
-
 
 ino_t lookup( string name, ino_t fh ) {
     // Searches for and returns ino of file of a given name within the 
@@ -1096,24 +1072,6 @@ ino_t find_ino( string path ) {
     }
     return fh;
 } 
-/*
-ino_t find_ino( string path )
-{
-    int fh = get_ino(path);
-    if(S_ISLNK(ilist.entry[fh].metadata.st_mode) )
-    {
-        char link[50];
-        int err = my_readlink(path.c_str(), link, 50);
-        if(err == -1)
-        {
-            cout << "Error: Readlink fails" << endl;
-            return an_err;
-        }
-
-        fh = get_ino(link);
-    }
-    return fh;
-}*/
 
 File* find_file( ino_t ino ) { // could improve readability of code
     return & ilist.entry[ino];
@@ -1125,7 +1083,6 @@ File* find_file( string s ) {  // could improve readability of code
 }
 
 
-// called at line #659 of bbfs.c
 MY_DIR * my_opendir( const char path[PATH_MAX] ) {
     return fopendir( find_ino( path ) ); 
     // Note that fopendir checks whether its input is the handle of a
