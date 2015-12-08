@@ -37,7 +37,12 @@
 
 #ifdef HAVE_SYS_XATTR_H
 #include <sys/xattr.h>
+#include <attr/xattr.h>
 #endif
+
+//#include <sys/xattr.h>
+//#include <attr/xattr.h>
+
 
 // Here we include
 // C stuff
@@ -72,8 +77,8 @@ void show_statvfs( struct statvfs *buf);
 void initialize();                  
 ino_t find_real_ino( string path );
 ino_t find_ino( string path );
-ino_t find_sym_ino( string path );
 ino_t lookup( string name, ino_t fh );
+void print_xattr_list(char* buf, int size);
 
 // Here is a convenient macro for debugging.  cdbg works like cerr but 
 // prefixes the error message with its location: line number and function
@@ -95,9 +100,10 @@ public:
     //inode metadata;                     // for use by all files
     struct stat metadata;                 // for use by all files
     // one or the other of the following (data and frame) should be empty.
-    string data;                          // for use by regular files
-    vector<dirent_frame> dentries;        // for use by directories
+    string data;                            // for use by regular files
+    vector<dirent_frame> dentries;          // for use by directories
     // list<dirent_frame> dentries;        // it'd be cleaner to make this a list
+    map<string, string> xattr;              // Map to hold a list of xattr of form (name, value)
 };
 
 
@@ -733,23 +739,107 @@ int my_fsync( ino_t fh ) {
 }  
 
 // called at line #575 of bbfs.c
-int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t size, int flags ) {
-    return an_err;  
+//Stores (name:value) into fpath
+int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t size, int flags )
+{
+    ino_t fh = find_real_ino(fpath);
+
+    string x_name = (string)name;
+    string x_val = (string)value;
+
+    std::pair<std::map<string, string>::iterator,bool> ret;
+
+    ret = ilist.entry[fh].xattr.insert(std::pair<string,string> (x_name, x_val) );
+    if(ret.second == false)
+    {
+        errno = EEXIST;
+        return an_err;
+    }
+
+    return ok;  
 }  
 
 // called at line #592 of bbfs.c
-int my_lgetxattr( const char *fpath, const char *name, char *value, size_t size, int flags ) {
-    return an_err;  
+int my_lgetxattr( const char *fpath, const char *name, char *value, size_t size, int flags )
+{
+    ino_t fh = find_real_ino(fpath);
+
+    std::map<string,string>::iterator it;
+
+    it = ilist.entry[fh].xattr.find(name);
+    if(it == ilist.entry[fh].xattr.end() )
+    {
+        cout << "Error: Attribute does not exist" << endl;
+        return an_err;
+    }
+
+    value = (char*)(it->second).c_str();
+
+    return strlen(value); 
 }  
+
+void print_xattr_list(char* buf, int size)
+{
+    cout << "Attribute List" << endl;
+    for(int i = 0; i < size; i++)
+    {
+        if(!buf[i-1]) cout << '\t';
+        cout << (buf[i] ? buf[i] : '\n');
+    }
+}
 
 // called at line #613 of bbfs.c
 int my_llistxattr( const char *path, char *list, size_t size ) {
-    return an_err;  
+    ino_t fh = find_real_ino(path);
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
+
+    int tmpsize;
+    int curPos = 0;
+
+    std::map<string,string>::iterator it;
+    for(it = ilist.entry[fh].xattr.begin(); it != ilist.entry[fh].xattr.end(); it++)
+    //Goes through each attribute in the xattr list
+    {
+        tmpsize = strlen((it->first).c_str());
+        if((curPos + tmpsize + 1) < (size))
+        {
+            //list[curPos] = (it->first).c_str();
+            for(int i = 0; i < tmpsize; i++)
+            {
+                list[curPos+i] = (it->first).at(i);
+            }
+            list[curPos+tmpsize] = '\0'; //Should be null, 0 for debugging
+            curPos = curPos + tmpsize + 1;
+        }
+        else{
+            break;
+        }
+    }
+    return curPos;
 }  
 
 // called at line #634 of bbfs.c
 int my_lremovexattr( const char *path, const char *name ) {
-    return an_err;  
+    ino_t fh = find_ino(path);
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
+
+    std::map<string,string>::iterator it;
+    it = ilist.entry[fh].xattr.find(name);
+    if(it == ilist.entry[fh].xattr.end())
+    {
+        errno = ENOATTR;
+        return an_err;
+    }
+    ilist.entry[fh].xattr.erase(it);
+    return ok;  
 }  
 
 
@@ -1271,6 +1361,12 @@ int describe_file( string pathname ) {
         return -1;
     }
 
+    ino_t fh = find_ino(pathname);
+    if(fh == 0)
+    {
+        return an_err;
+    }
+
     cout << st.st_ino << ": "
              << ( (S_ISDIR(st.st_mode) != 0) ? 'd' : (  (S_ISLNK(st.st_mode) != 0) ? 'l' : '-' ) )
              << ( (st.st_mode & S_IRUSR) ? 'r' : '-' )
@@ -1282,6 +1378,7 @@ int describe_file( string pathname ) {
              << ( (st.st_mode & S_IROTH) ? 'r' : '-' )
              << ( (st.st_mode & S_IWOTH) ? 'w' : '-' )
              << ( (st.st_mode & S_IXOTH) ? 'x' : '-' )
+             << ( ilist.entry[fh].xattr.size() ? '+' : ' ')
     ;
 
     char date[64];
@@ -1653,6 +1750,45 @@ int main(int argc, char* argv[] ) {
             struct statvfs statbuf;
             int err = my_statvfs(file.c_str(), &statbuf);
             show_statvfs(&statbuf);
+        }
+        else if (op == "lsetxattr")
+        {
+            string name, val;
+            cout << "Specify name: ";
+            cin >> name;
+            cout << "Specify value: ";
+            cin >> val;
+
+            my_lsetxattr(file.c_str(),name.c_str(),val.c_str(),0,0);
+        }
+        else if (op == "lgetxattr")
+        {
+            string name, val;
+            int size;
+            cout << "Specify name: ";
+            cin >> name;
+            cout << "Specify size: ";
+            cin >> size;
+
+            val.resize(size+1,'\0');
+
+            my_lgetxattr(file.c_str(), name.c_str(), (char*)val.c_str(), size, 0);
+
+        }
+        else if (op == "lremovexattr")
+        {
+            string name;
+            cout << "Specify name: ";
+            cin >> name;
+
+            my_lremovexattr(file.c_str(), name.c_str());          
+        }
+        else if (op == "llistxattr")
+        {
+            int size = 100;
+            char buf[size];
+            size = my_llistxattr(file.c_str(), buf, size);
+            print_xattr_list(buf, size);
         }
         else
         {
