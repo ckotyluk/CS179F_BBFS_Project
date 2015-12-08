@@ -80,6 +80,7 @@ ino_t find_real_ino( string path );
 ino_t find_ino( string path );
 ino_t lookup( string name, ino_t fh );
 void print_xattr_list(char* buf, int size);
+int reset_cin();
 
 // Here is a convenient macro for debugging.  cdbg works like cerr but 
 // prefixes the error message with its location: line number and function
@@ -740,6 +741,10 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
         errno = ENOENT;
         return an_err;
     }
+    if(statv == NULL)
+    {
+        return an_err;
+    }
 
     statv->f_bsize      = 0;
     statv->f_frsize     = 0;
@@ -757,6 +762,12 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
 }  
 
 int my_close( int fh ) {
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
+
     //Since we are closing a file, we decremente the nlink count
     ilist.entry[fh].metadata.st_nlink--;
 
@@ -931,6 +942,16 @@ int my_ftruncate( ino_t fh, off_t offset ) {
     {
         cout << "Error: Bad fh" << endl;
         errno = EBADF;
+        return an_err;
+    }
+    if(offset < 0)
+    {
+        errno = EINVAL;
+        return an_err;
+    }
+    if(S_ISDIR(ilist.entry[fh].metadata.st_mode))
+    {
+        errno = EISDIR;
         return an_err;
     }
     //Changes size of data, adding null if the new size is bigger
@@ -1556,7 +1577,17 @@ int visit( string root ) { // recursive visitor function, implements lslr
 //   return visit( argc > 1 ? argv[1] : "." ); 
 // }
 
-
+int reset_cin()
+{
+    if(!cin)
+    {
+        cin.clear();
+        string ignore;
+        getline(cin,ignore);
+        return -1;
+    }
+    return 0;
+}
 
 
 int main(int argc, char* argv[] ) {
@@ -1588,8 +1619,14 @@ int main(int argc, char* argv[] ) {
             mode_t mode; 
             // cin >> oct >> mode;
             (myin.good()? myin : cin) >> oct >> mode;
-            record << oct << mode << endl;
-            my_mkdir(file.c_str(), mode );
+            if(reset_cin() == -1)
+            {
+                cout << "Error: Not an octal input. Try again." << endl;
+            }
+            else{
+                record << oct << mode << endl;
+                my_mkdir(file.c_str(), mode );
+            }
         }
         else if (op == "rmdir"  ) // shows file's metadata
         {
@@ -1632,8 +1669,15 @@ int main(int argc, char* argv[] ) {
             mode_t mode; 
             // cin >> oct >> mode;
             (myin.good()? myin : cin) >> oct >> mode;
-            record << oct << mode << endl;
-            my_creat(file.c_str(), mode );
+            if(reset_cin() == -1)
+            {
+                cout << "Error: Not an octal input. Try again." << endl;
+            }
+            else
+            {
+                record << oct << mode << endl;
+                my_creat(file.c_str(), mode );
+            }
         }
         else if (op == "chown" ) //Changes owner of file
         {
@@ -1642,13 +1686,29 @@ int main(int argc, char* argv[] ) {
 
             cout << "Specify user id: ";
             (myin.good() ? myin : cin) >> dec >> u;
-            record << dec << u << endl;
+            if(reset_cin() == -1)
+            {
+                cout << "Error: Not a decimal input. Try again." << endl;
+            }
+            else
+            {
 
-            cout << "Specify group id: ";
-            (myin.good() ? myin : cin) >> dec >> g;
-            record << dec << g << endl;
+                record << dec << u << endl;
 
-            my_chown(file.c_str(), u, g);
+                cout << "Specify group id: ";
+                (myin.good() ? myin : cin) >> dec >> g;
+
+                if(reset_cin() == -1)
+                {
+                    cout << "Error: Not a decimal input. Try again." << endl;
+                }
+                else
+                {
+                    record << dec << g << endl;
+
+                    my_chown(file.c_str(), u, g);
+                }
+            }
         }
         else if (op == "chmod" )
         {
@@ -1656,8 +1716,16 @@ int main(int argc, char* argv[] ) {
             mode_t mode; 
             // cin >> oct >> mode;
             (myin.good()? myin : cin) >> oct >> mode;
-            record << oct << mode << endl;
-            my_chmod(file.c_str(), mode );
+
+            if(reset_cin() == -1)
+            {
+                cout << "Error: Not an octal input. Try again." << endl;
+            }
+            else
+            {
+                record << oct << mode << endl;
+                my_chmod(file.c_str(), mode );
+            }
         }
         else if (op == "access" )
         {
@@ -1665,9 +1733,17 @@ int main(int argc, char* argv[] ) {
             mode_t mode; 
             // cin >> oct >> mode;
             (myin.good()? myin : cin) >> oct >> mode;
-            record << oct << mode << endl;
-            int ret = my_access(file.c_str(), mode);
-            cout << ( ret == 0 ? "All requested permissions granted" : "Some permissions failed" ) << endl;
+
+            if(reset_cin() == -1)
+            {
+                cout << "Error: Not an octal input. Try again." << endl;
+            }
+            else
+            {
+                record << oct << mode << endl;
+                int ret = my_access(file.c_str(), mode);
+                cout << ( ret == 0 ? "All requested permissions granted" : "Some permissions failed" ) << endl;
+            }
         }
 		else if (op == "link")
         {
