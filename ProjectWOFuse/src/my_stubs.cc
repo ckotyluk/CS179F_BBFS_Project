@@ -598,8 +598,10 @@ int my_chmod(const char *path, mode_t mode) {
 int my_chown(const char *path, uid_t uid, gid_t gid) {
     
     ino_t fh = find_ino(path);
-    if(fh == -1)
+    if(fh == 0)
+    {
         return an_err;
+    }
 
     ilist.entry[fh].metadata.st_uid = uid;
     ilist.entry[fh].metadata.st_gid = gid;
