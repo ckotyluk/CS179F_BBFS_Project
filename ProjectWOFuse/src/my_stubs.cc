@@ -1,6 +1,3 @@
-
-// Note: this code is a work-in-progress.  This version: 2:00PM PST 11/14/15
-
 // I intend that the prototypes and behaviors of these functions be
 // identical to those of their glibc counterparts, with three minor
 // exceptions:
@@ -199,7 +196,7 @@ const int ok = 0;
 const int an_err = -1;
 // Note that for pointer and ino_t return values, 0 indicates an error.
 
-
+// Stores stat information about a file called path into statbuf
 int my_lstat( const char* path, struct stat *statbuf ) {
     //cdbg << "lstat has been called and is calling find_ino on " << path << endl;
     ino_t fh = find_real_ino(path);
@@ -214,30 +211,18 @@ int my_lstat( const char* path, struct stat *statbuf ) {
     return retstat;
 }  
 
-int my_readlink( const char *path, char *link, size_t size ) {
+// Returns metadata about a file fh and stores data in statbuf
+int my_fstat( ino_t fh, struct stat* statbuf ) {
 
-    int fh = find_real_ino(path);
-    if (fh == 0)
-    {
-        cout << path << " does not exist" << endl;
+    if ( ilist.entry.count(fh) == 0 ) {
+        errno = ENOENT;
         return an_err;
-    }
-
-    if( !S_ISLNK(ilist.entry[fh].metadata.st_mode) )
-    {
-        cout << "Not a link" << endl;
-        return an_err;
-    }
-
-    int err = my_pread(fh, link, size, 0);
-    if(err == -1)
-    {
-        cout << "Pread error" << endl;
-        return an_err;
-    }
-    return ok;  
+    }  
+    *statbuf = ilist.entry[fh].metadata;
+    return ok;
 }  
 
+//Used to create files in the file system
 int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     //cdbg <<"mknod been called with " << path << " " << oct << mode 
     //       << " " << dev <<endl;
@@ -326,10 +311,9 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
     }
 
     return ok;
-
 }  
 
-
+// Used to create directory files in the file system
 int my_mkdir( const char *path, mode_t mode ) {
     // returns an error code.
     //cdbg << "mkdir has been called with path \"" << path<< "\" and mode " \
@@ -337,6 +321,72 @@ int my_mkdir( const char *path, mode_t mode ) {
     return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
+// Uses mknod to create a regular file
+int my_creat( const char *fpath, mode_t mode ) {
+    // we can create a file by using the right flags to open
+
+    vector<string> v = split( fpath, "/" );
+    string tail = v.back();
+    if(tail == "." || tail == "..")
+    {
+        cout << "Error: Trying to create . or .. as a regular file" << endl;
+        return an_err;
+    }
+
+    return my_mknod(fpath, (S_IFREG | mode), 100 );
+} 
+
+// Adds a new hardlink to a file
+// Adds an additional name for a file
+int my_link(const char *path, const char *newpath) {
+    ino_t fh = find_ino(path);
+    if(fh == 0) // Check that path exists
+    {
+        errno = EPERM;
+        cout << "Source file " << path << " does not exist." << endl;
+        return an_err;
+    }
+    
+    if ( !S_ISREG( ilist.entry[fh].metadata.st_mode ) ) // Stop if not a file
+    {
+        errno = EMLINK;  // only one link to each directory.
+        return an_err; 
+    }
+    
+    // Split up new path to create parent path
+    vector<string> v = split(string(newpath),"/");
+    string tail = v.back();
+    v.pop_back(); // get rid of tail
+    string parent_path = join(v, "/"); // the remaining part of newpath
+
+    ino_t parent_fh = find_ino(parent_path);
+    if(parent_fh == 0) // Check that newpath has a valid parent directory
+    {
+        errno = EPERM;
+        cout << "Destination parent directory " << parent_path << " noes not exist." << endl;
+        return an_err;
+    }
+
+    ino_t new_fh = find_ino(newpath);
+    if(new_fh != 0) // New file already exists
+    {
+        errno = EEXIST;
+        cout << "Destination file " << newpath << " already exists." << endl;
+        return an_err;
+    }
+    
+    ++ilist.entry[fh].metadata.st_nlink; // no overflow since fh is regular.
+    
+    // Create a new dirent_frame and push it into the correct parent directory
+    dirent_frame df;
+    strcpy(df.the_dirent.d_name, tail.c_str() );
+    df.the_dirent.d_ino  = fh;  
+    ilist.entry[parent_fh].dentries.push_back(df);
+    return ok;
+}
+
+// Removes the dirent for the fille
+// Reduces the nlink of a file by 1, and remove the inode if necessary
 int my_unlink( const char *path ) {
 	
     ino_t fh = find_ino(path);
@@ -364,6 +414,7 @@ int my_unlink( const char *path ) {
     //cdbg << "Parent path is: " << parent << endl;
     ino_t parent_fh = find_ino(parent.c_str());
 
+    // Removes the dirent
     for(int i = 0; i < ilist.entry[parent_fh].dentries.size(); i++){
         cdbg << ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name << " ?== " << path << endl;
         if((string)ilist.entry[parent_fh].dentries.at(i).the_dirent.d_name == (string)tail){
@@ -373,6 +424,7 @@ int my_unlink( const char *path ) {
         }
     }
 
+    // Deletes the inode if nlink is 0
     ilist.entry[fh].metadata.st_nlink--;
     if(ilist.entry[fh].metadata.st_nlink <= 0)
     {
@@ -380,9 +432,9 @@ int my_unlink( const char *path ) {
 	}
 
     return ok;   
-
 }  
 
+// Removes a directory from the file system
 int my_rmdir( const char *path ) {
     // See http://linux.die.net/man/2/rmdir for a full list of all 13
     // possible errors for rmdir.
@@ -421,10 +473,9 @@ int my_rmdir( const char *path ) {
     return ok;
 }  
 
+//Makes a softlink of link that points to path
+//File at link contains path
 int my_symlink(const char *path, const char *link) {
-    //Makes a softlink of link that points to path
-    //File at link contains path
-
     vector<string> v_link = split(string(link), "/");
     string link_tail = v_link.back();
 
@@ -466,6 +517,34 @@ int my_symlink(const char *path, const char *link) {
 	return ok;
 }
 
+// Reads the contents on a soft link (symbolic link)
+// Reads the path that is stored in the file path and stores in link
+int my_readlink( const char *path, char *link, size_t size ) {
+
+    int fh = find_real_ino(path);
+    if (fh == 0)
+    {
+        cout << path << " does not exist" << endl;
+        return an_err;
+    }
+
+    if( !S_ISLNK(ilist.entry[fh].metadata.st_mode) )
+    {
+        cout << "Not a link" << endl;
+        return an_err;
+    }
+
+    int err = my_pread(fh, link, size, 0);
+    if(err == -1)
+    {
+        cout << "Pread error" << endl;
+        return an_err;
+    }
+    return ok;  
+}  
+
+// Renames path into newpath
+// Overwrites data if newpath already exists
 int my_rename( const char *path, const char *newpath ) {
     
     ino_t original_fh = find_ino(path);
@@ -490,15 +569,10 @@ int my_rename( const char *path, const char *newpath ) {
 
     if(lookup(newpath_tail, parent_newpath_fh)) //File with same name exists in newpath dir
     {
-        //cdbg << "File with same name exists in newpath dir" << endl;
-        //return an_err;
-
         for(int i = 0; i < ilist.entry[parent_newpath_fh].dentries.size(); i++)
         {
-            //cdbg << "Checking " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)newpath_tail << endl;
             if((string)ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name == (string)newpath_tail)
             {
-                //cdbg << "Removing newpath: " << ilist.entry[parent_newpath_fh].dentries.at(i).the_dirent.d_name << endl;
                 ilist.entry[parent_newpath_fh].dentries.erase(ilist.entry[parent_newpath_fh].dentries.begin()+i);
                 break;
             } 
@@ -507,76 +581,50 @@ int my_rename( const char *path, const char *newpath ) {
 
     for(int i = 0; i < ilist.entry[parent_path_fh].dentries.size(); i++)
     {
-        //cdbg << "Checking " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << " ==? " << (string)path_tail << endl;
         if((string)ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name == (string)path_tail)
         {
-            //cdbg << "Removing " << ilist.entry[parent_path_fh].dentries.at(i).the_dirent.d_name << endl;
             ilist.entry[parent_path_fh].dentries.erase(ilist.entry[parent_path_fh].dentries.begin()+i);
             break;
         } 
     }
 
+    // Creates the new dirent_frame and pushes it into the parent directory
     dirent_frame df;
-
     strcpy(df.the_dirent.d_name, newpath_tail.c_str());
     df.the_dirent.d_ino = original_fh;
 
     ilist.entry[parent_newpath_fh].dentries.push_back(df);
 
-    //cdbg << "Pushing new dirent with [" << df.the_dirent.d_name << ", " << df.the_dirent.d_ino << "] onto " << parent_newpath_fh << endl;
-
     return ok;
 }  
 
-int my_link(const char *path, const char *newpath) {
-	ino_t fh = find_ino(path);
-    if(fh == 0) // Check that path exists
+// Checks file perms with your perms
+// If all perms match, return 0
+// If not, returns -1
+int my_access( const char *fpath, int mask ) {
+    
+    ino_t fh = find_ino(fpath);
+    vector<string> v = split(fpath,"/");
+    string filename = v.back();
+
+    //Get stat to get the perms
+    struct stat st;
+    if ( my_fstat( fh, &st ) != 0 )
     {
-		errno = EPERM;
-		cout << "Source file " << path << " does not exist." << endl;
-		return an_err;
-	}
-	
-	if ( !S_ISREG( ilist.entry[fh].metadata.st_mode ) ) // Stop if not a file
-	{
-        errno = EMLINK;  // only one link to each directory.
-        return an_err; 
+        cerr << "Cannot stat file: " << filename
+             << ": " << strerror(errno) << endl;
+        return an_err;
     }
-    
-    // Split up new path to create parent path
-    vector<string> v = split(string(newpath),"/");
-    string tail = v.back();
-    v.pop_back(); // get rid of tail
-    string parent_path = join(v, "/"); // the remaining part of newpath
 
-	ino_t parent_fh = find_ino(parent_path);
-	if(parent_fh == 0) // Check that newpath has a valid parent directory
-    {
-		errno = EPERM;
-		cout << "Destination parent directory " << parent_path << " noes not exist." << endl;
-		return an_err;
-	}
+    //Check that the perms in mask match the user perms for the file
+    if( (st.st_mode & S_IRUSR) != (mask & S_IRUSR) ) return an_err;
+    if( (st.st_mode & S_IWUSR) != (mask & S_IWUSR) ) return an_err;
+    if( (st.st_mode & S_IXUSR) != (mask & S_IXUSR) ) return an_err;
 
-    ino_t new_fh = find_ino(newpath);
-	if(new_fh != 0) // New file already exists
-    {
-		errno = EEXIST;
-		cout << "Destination file " << newpath << " already exists." << endl;
-		return an_err;
-	}
-	
-    // if dirpath didn't name a directory, find_ino() would have failed.
-    cout << "n_link was: " << ilist.entry[fh].metadata.st_nlink;
-    ++ilist.entry[fh].metadata.st_nlink; // no overflow since fh is regular.
-    cout << " and is now: " << ilist.entry[fh].metadata.st_nlink << endl;
-    
-    dirent_frame df;
-    strcpy(df.the_dirent.d_name, tail.c_str() );
-    df.the_dirent.d_ino  = fh;  
-    ilist.entry[parent_fh].dentries.push_back(df);
-    return ok;
-}  
+    return ok;  
+} 
 
+// Changes the permissions of the file named by path
 int my_chmod(const char *path, mode_t mode) {
     ino_t fh = find_ino(path);
 
@@ -595,6 +643,7 @@ int my_chmod(const char *path, mode_t mode) {
     return ok;
 }  
 
+// Changes the owners of teh file named by path
 int my_chown(const char *path, uid_t uid, gid_t gid) {
     
     ino_t fh = find_ino(path);
@@ -609,6 +658,7 @@ int my_chown(const char *path, uid_t uid, gid_t gid) {
     return ok;
 }  
 
+// Changes the access time and mod time of a file named by path
 int my_utime(const char *path, struct utimbuf *ubuf) {
     if(ubuf == NULL)
     {
@@ -662,6 +712,26 @@ int my_open( const char *path, int flags ) {
     }
 }  
 
+// Cloeses a file by decrement nlink and removing the inode if necessary
+int my_close( int fh ) {
+    if(fh == 0)
+    {
+        errno = ENOENT;
+        return an_err;
+    }
+
+    //Since we are closing a file, we decremente the nlink count
+    ilist.entry[fh].metadata.st_nlink--;
+
+    //Whenever the nlink count is 0, we need to delete that data
+    if( ilist.entry[fh].metadata.st_nlink == 0 )
+        ilist.entry.erase(fh);
+
+    return ok;
+}  
+
+// Attempts to read size bytes from the file described by fh starting at offset
+// Stored the read data into buf
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
     
     if(S_ISDIR( ilist.entry[fh].metadata.st_mode))
@@ -669,9 +739,6 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
         cout << "Error: Trying to read from a non-regular file." << endl;
         return an_err;
     }
-
-    //cdbg << "File[" << fh << "] size: " << ilist.entry[fh].data.length() << endl;
-    //cdbg << "File[" << fh << "] contains: [" << ilist.entry[fh].data << "]" << endl;
     
     int bufLen = size;
 	int fileLen = ilist.entry[fh].data.length();
@@ -684,15 +751,15 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
         strcpy(buf, (char *)ilist.entry[fh].data.substr(offset).c_str());
 		return fileLen - offset;
 	}
-	else{ // copy everything
+	else{ // Copy Everything
         strcpy(buf, (char*)ilist.entry[fh].data.substr(offset, size).c_str());
 		return size;
 	}
 }  
 
+// Attempts to write size bytes from the buf starting at offset
+// and stores the data in the file described by fh
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
-    //cout << "File size: " << ilist.entry[fh].data.size() << endl;
-    //cout << "New size: " << size << endl;
 
     int new_size = ilist.entry[fh].data.size() + size;
 
@@ -710,21 +777,16 @@ int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
 
     if(offset > ilist.entry[fh].data.size())
     {
-        //cout << "Offset past end of file" << endl;
         offset = ilist.entry[fh].data.size();
-        //cout << "Offset is now: " << offset << endl;
     }
 
     ilist.entry[fh].data.resize(new_size);
-    //cout << "File size after resize(): " << ilist.entry[fh].data.size() << endl;
-
 
     string str((char*)buf);
 	
 	int j = 0;
 	for(int i = offset; i < offset + size; i++)
     {
-		//cout << "Writing to " << i << endl;
         ilist.entry[fh].data.at(i) = str[j++];
     }
 
@@ -735,6 +797,7 @@ int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
 	return str.length();
 }  
 
+// Reads information about the file system and stores the results in statv
 int my_statvfs(const char *fpath, struct statvfs *statv) {
     
     ino_t fh = find_ino(fpath);
@@ -763,32 +826,17 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
     return ok;  
 }  
 
-int my_close( int fh ) {
-    if(fh == 0)
-    {
-        errno = ENOENT;
-        return an_err;
-    }
-
-    //Since we are closing a file, we decremente the nlink count
-    ilist.entry[fh].metadata.st_nlink--;
-
-    //Whenever the nlink count is 0, we need to delete that data
-    if( ilist.entry[fh].metadata.st_nlink == 0 )
-        ilist.entry.erase(fh);
-
-    return ok;
-}  
-
+// Deals with a storage device, not implemented
 int my_fdatasync( ino_t fh ) {
     return an_err;  
 }  
 
+// Deals with a storage device, not implemented
 int my_fsync( ino_t fh ) {
     return an_err;  
 }  
 
-//Stores (name:value) into fpath
+// Stores (name:value) into fpath
 int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t size, int flags )
 {
     ino_t fh = find_real_ino(fpath);
@@ -813,6 +861,7 @@ int my_lsetxattr( const char *fpath, const char *name, const char *value, size_t
     return ok;  
 }  
 
+// Gets value referenced by name from the fpath attributes
 int my_lgetxattr( const char *fpath, const char *name, char *value, size_t size, int flags )
 {
     ino_t fh = find_real_ino(fpath);
@@ -836,6 +885,8 @@ int my_lgetxattr( const char *fpath, const char *name, char *value, size_t size,
     return strlen(value); 
 }  
 
+// Outputs a list of all attribute names stored in buf
+// Each entry is separated by a null character
 void print_xattr_list(char* buf, int size)
 {
     cout << "Attribute List" << endl;
@@ -846,6 +897,8 @@ void print_xattr_list(char* buf, int size)
     }
 }
 
+// Stores a list of the name attributes of path into list
+// Deals with a storage device, not implemented
 int my_llistxattr( const char *path, char *list, size_t size ) {
     ino_t fh = find_real_ino(path);
     if(fh == 0)
@@ -878,6 +931,7 @@ int my_llistxattr( const char *path, char *list, size_t size ) {
     return curPos;
 }  
 
+// Removes an attribute named name from path
 int my_lremovexattr( const char *path, const char *name ) {
     ino_t fh = find_ino(path);
     if(fh == 0)
@@ -895,50 +949,9 @@ int my_lremovexattr( const char *path, const char *name ) {
     }
     ilist.entry[fh].xattr.erase(it);
     return ok;  
-}  
+}    
 
-
-//Checks file perms with your perms
-//If all perms match, return 0
-//If not, returns -1
-int my_access( const char *fpath, int mask ) {
-    
-    ino_t fh = find_ino(fpath);
-    vector<string> v = split(fpath,"/");
-    string filename = v.back();
-
-    //Get stat to get the perms
-    struct stat st;
-    if ( my_fstat( fh, &st ) != 0 )
-    {
-        cerr << "Cannot stat file: " << filename
-             << ": " << strerror(errno) << endl;
-        return an_err;
-    }
-
-    //Check that the perms in mask match the user perms for the file
-    if( (st.st_mode & S_IRUSR) != (mask & S_IRUSR) ) return an_err;
-    if( (st.st_mode & S_IWUSR) != (mask & S_IWUSR) ) return an_err;
-    if( (st.st_mode & S_IXUSR) != (mask & S_IXUSR) ) return an_err;
-
-    return ok;  
-}  
-
-int my_creat( const char *fpath, mode_t mode ) {
-    // we can create a file by using the right flags to open
-
-    vector<string> v = split( fpath, "/" );
-    string tail = v.back();
-    if(tail == "." || tail == "..")
-    {
-        cout << "Error: Trying to create . or .. as a regular file" << endl;
-        return an_err;
-    }
-
-    return my_mknod(fpath, (S_IFREG | mode), 100 );
-}  
-
-
+// Changes the size of the data in the indoe referenced by fh
 int my_ftruncate( ino_t fh, off_t offset ) {
     if(fh == 0)
     {
@@ -956,12 +969,14 @@ int my_ftruncate( ino_t fh, off_t offset ) {
         errno = EISDIR;
         return an_err;
     }
+
     //Changes size of data, adding null if the new size is bigger
     ilist.entry[fh].data.resize(offset,'\0');
     ilist.entry[fh].metadata.st_size = ilist.entry[fh].data.length();
     return ok;
 }  
 
+// Gets the inode number (file handle/fh) and then uses ftruncate
 int my_truncate(const char *path, off_t newsize) {
     if(newsize < 0)
     {
@@ -987,19 +1002,6 @@ int my_truncate(const char *path, off_t newsize) {
     return my_ftruncate(fh, newsize);
 }  
 
-int my_fstat( ino_t fh, struct stat* statbuf ) {
-
-    //cdbg << "my_fstat has been called on " << fh << " " << long(statbuf) << endl;
-    if ( ilist.entry.count(fh) == 0 ) {
-        errno = ENOENT;
-        return an_err;
-    }  
-    *statbuf = ilist.entry[fh].metadata;
-    // cdbg << "and here's *statbuf for " << endl;
-    // show_stat(*statbuf);
-    return ok;
-}  
-
 
 // Here are my helper functions ==================================
 
@@ -1018,7 +1020,7 @@ int my_fstat( ino_t fh, struct stat* statbuf ) {
 // file handle into a DIR* via "(uintptr_t) fh."  But, his file handles
 // are indices of byte streams, while our are the addresses of inodes.
 
-
+// Opens a directory and returns a MY_DIR pointer
 MY_DIR* fopendir( ino_t fh ) {  // not exported
     if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
         return 0;  // null pointer indicates err
@@ -1030,26 +1032,27 @@ MY_DIR* fopendir( ino_t fh ) {  // not exported
     return tmp;
 }
 
-
+// Reads the dirents in the directory pointed to by *dirp
 dirent* my_readdir( MY_DIR* dirp ) {  
     vector<dirent_frame> v = ilist.entry[dirp->fh].dentries;
     int tmp = dirp->index++;  // post increment dirp*'s index.
     return tmp == v.size() ? 0 : & v[tmp].the_dirent;
 }
 
+// Closes a directory
 int my_closedir( MY_DIR* dirp ) {
     delete dirp;  
 }
 
-ino_t lookup( string name, ino_t fh ) {
-    // Searches for and returns ino of file of a given name within the 
-    // directory given by fh.  This function will be used by find_ino().
+
+// Searches for and returns ino of file of a given name within the 
+// directory given by fh.  This function will be used by find_ino().
+ino_t lookup( string name, ino_t fh ) { 
 
     MY_DIR* dirp = fopendir( fh ); 
     // fopendir() will return 0 if fh isn't the handle of a directory.
     if ( ! dirp ) return 0;                   // And so will lookup().
     while ( dirent* dp = my_readdir(dirp) ) {  
-        //cdbg << dp->d_name << " =? " <<name<< " then return " << dp->d_ino << endl;
         if ( string(dp->d_name) == name ) { // comparision of C++ strings
             my_closedir(dirp);
             return dp->d_ino;  
@@ -1059,6 +1062,7 @@ ino_t lookup( string name, ino_t fh ) {
     return 0;  // name-not-found
 }  
 
+// Find the inode numbers(file handle/fh) of the file without following links
 ino_t find_real_ino( string path ) {
 
     //cdbg << "find_ino() has been called with path \"" << path << "\"\n"; 
@@ -1100,7 +1104,7 @@ ino_t find_real_ino( string path ) {
     return fh;
 } 
 
-
+// Finds the inode number(file handle/fh) of the file with following links
 ino_t find_ino( string path ) {
     int fh = find_real_ino(path);
     if(S_ISLNK(ilist.entry[fh].metadata.st_mode) )
@@ -1118,16 +1122,17 @@ ino_t find_ino( string path ) {
     return fh;
 } 
 
+// Returns a pointer to a file that is referenced by ino
 File* find_file( ino_t ino ) { // could improve readability of code
     return & ilist.entry[ino];
 }
 
-
+// Returns a File* with the name s
 File* find_file( string s ) {  // could improve readability of code
     return find_file(find_ino(s));
 }
 
-
+// Opens a directory and returns a MY_DIR*
 MY_DIR * my_opendir( const char path[PATH_MAX] ) {
     return fopendir( find_ino( path ) ); 
     // Note that fopendir checks whether its input is the handle of a
@@ -1137,10 +1142,9 @@ MY_DIR * my_opendir( const char path[PATH_MAX] ) {
 
 int describe_file( string pathname );
 
+// Calls ls -l on a file
 int ls(string path) {
     // diagnostic tool to see what's in a directory
-    // cdbg << "ls has been called on \"" << path << "\" and ilist has "   
-    // << ilist.entry.size() << " entries\n";
     ino_t fh = find_real_ino(path.c_str());
     if ( fh == 0 ) return an_err;
     File f = ilist.entry[fh];
@@ -1148,15 +1152,13 @@ int ls(string path) {
         errno = ENOTDIR;
         cdbg << "ilist entry " << fh << " isn't a directory: mode = " 
                  << oct << f.metadata.st_mode << endl;
-        //show_stat( f.metadata );
         describe_file(path);
         return ok;
     }
     vector<struct dirent_frame> v = f.dentries;
-    //cdbg << "The directory (ino" << fh << ") has " << v.size() << " entries:\n";
+
     for ( auto it : v ) {
         struct dirent d = it.the_dirent;
-        //cout << d.d_ino << " " << d.d_name << endl;
         describe_file( path+"/"+d.d_name );
     }
 }
@@ -1575,10 +1577,7 @@ int visit( string root ) { // recursive visitor function, implements lslr
 }
 
 
-// int main( int argc, char* argv[] ) { 
-//   return visit( argc > 1 ? argv[1] : "." ); 
-// }
-
+// Resets cin by removing bad characters from the stream
 int reset_cin()
 {
     if(!cin)
